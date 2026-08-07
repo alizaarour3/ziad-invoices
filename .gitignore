@@ -1,0 +1,38 @@
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Runtime databases and user content
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/*.sqlite3-*
+data/attachments/*
+!data/attachments/.gitkeep
+data/generated/*
+!data/generated/.gitkeep
+data/backups/*
+!data/backups/.gitkeep
+
+# Test runtime data
+tests/.test-data/
+
+# Build output and archives
+build/
+dist/
+*.zip
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

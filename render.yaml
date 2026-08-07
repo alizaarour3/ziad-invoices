@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: ziad-invoices
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: ziad-invoices
+      - key: ZIAD_STORAGE_BACKEND
+        value: supabase
+      - key: ZIAD_SESSION_HOURS
+        value: "24"
+      - key: ZIAD_MAX_ATTACHMENT_BYTES
+        value: "104857600"
