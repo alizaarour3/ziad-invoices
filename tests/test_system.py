@@ -170,7 +170,7 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.3'
+        assert status_data['version'] == '3.3.4'
         assert status_data['database']['ok'] is True
         assert status_data['counts']['documents'] == 1
         assert len(status_data['templates']) == 10
@@ -189,7 +189,7 @@ def test_system_status_and_backup():
             assert 'templates/originals/receipt-voucher-original.docx' in names
             assert 'app/static/templates/receipt-voucher.png' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.3'
+            assert manifest['version'] == '3.3.4'
             assert manifest['files']
 
 
@@ -340,3 +340,37 @@ def test_user_marked_field_alignment_contract():
     pdf_service = (project / 'app' / 'services' / 'pdf_service.py').read_text(encoding='utf-8')
     assert 'field.line_boxes' in javascript
     assert 'field.get("line_boxes")' in pdf_service
+
+
+def test_arabic_rtl_rendering_engine_and_pdf_output():
+    import json
+    from PIL import Image, features
+    from app.services.pdf_service import render_document_pdf
+
+    # CI/development builds must expose the shaping features required by the
+    # production renderer. The Dockerfile independently verifies the same
+    # requirement on Render.
+    assert features.check('raqm') is True
+    assert features.check('harfbuzz') is True
+    assert features.check('fribidi') is True
+
+    project = Path(__file__).resolve().parents[1]
+    config = json.loads((project / 'config' / 'templates.json').read_text(encoding='utf-8'))
+    output = TEST_DATA / 'arabic-pr.pdf'
+    render_document_pdf(config['PR'], {
+        'document_number': 'PR-000777',
+        'date': '2026-08-07',
+        'requester_name': 'محمد علي حسن',
+        'department': 'قسم الصيانة',
+        'pay_to': 'شركة التكامل العربي',
+        'purpose': 'شراء مواد صيانة للسيارة\nمع أجور النقل والخدمات',
+        'amount': '135000',
+        'currency': 'IQD',
+        'written_amount': 'مائة وخمسة وثلاثون ألف دينار عراقي فقط لا غير',
+        'prepared_by': 'علي حسن',
+        'verified_by': 'محمد كريم',
+        'approval': 'موافق',
+    }, output)
+    assert output.exists() and output.stat().st_size > 10_000
+    reader = PdfReader(str(output))
+    assert len(reader.pages) == 1

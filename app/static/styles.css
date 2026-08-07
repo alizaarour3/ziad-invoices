@@ -255,7 +255,7 @@ tr:hover td { background:#fbfaf5; }
   position:absolute; box-sizing:border-box; z-index:2; margin:0; padding:0 3px;
   border:1px dashed rgba(14,107,79,.65); background:rgba(255,255,255,.4); color:#1c2a22;
   outline:none; border-radius:2px; font-family:Arial, Tahoma, "Segoe UI", sans-serif;
-  font-weight:700; line-height:1.05; resize:none; overflow:hidden;
+  font-weight:700; line-height:1.05; resize:none; overflow:hidden; unicode-bidi:plaintext;
 }
 .template-field:focus { border:2px solid var(--primary); background:rgba(255,255,255,.9); box-shadow:0 0 0 3px var(--primary-soft); }
 .template-page.clean .template-field { border-color:transparent; background:transparent; }

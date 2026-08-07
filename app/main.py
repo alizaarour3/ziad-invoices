@@ -37,7 +37,7 @@ from .schemas import (
     UserUpdateRequest,
 )
 from .security import hash_password, utc_iso, verify_password
-from .services.pdf_service import build_print_bundle
+from .services.pdf_service import arabic_rendering_status, build_print_bundle
 from .services.backup_service import APP_VERSION, create_backup, database_integrity, template_integrity
 from .services.storage_service import StorageError, storage
 from .settings import DATA_DIR, GENERATED_DIR, MAX_ATTACHMENT_BYTES, STATIC_DIR
@@ -229,7 +229,7 @@ JOIN users updater ON updater.id=d.updated_by
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "version": APP_VERSION}
+    return {"ok": True, "version": APP_VERSION, "arabic_rendering": arabic_rendering_status()}
 
 
 @app.get("/api/setup/status")
@@ -1042,6 +1042,7 @@ def system_status(_: Annotated[CurrentUser, Depends(require("system.manage"))]):
         "version": APP_VERSION,
         "database": database_integrity(),
         "storage": storage.status(),
+        "arabic_rendering": arabic_rendering_status(),
         "templates": template_integrity(),
         "counts": counts,
         "attachment_bytes": attachment_bytes,

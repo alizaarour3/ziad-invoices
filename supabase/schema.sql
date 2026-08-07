@@ -1,4 +1,4 @@
--- Optional manual bootstrap for Ziad Invoices Professional 3.3.3.
+-- Optional manual bootstrap for Ziad Invoices Professional 3.3.4.
 -- The application creates the same schema automatically on startup.
 
 create table if not exists public.schema_meta (

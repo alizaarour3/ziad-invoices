@@ -228,7 +228,7 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
       <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-head">
-          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.3</span></div></div>
+          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.4</span></div></div>
           <button id="sidebar-close" class="btn btn-icon btn-link sidebar-close" aria-label="إغلاق القائمة">${icon('close')}</button>
         </div>
         <nav class="sidebar-nav">
@@ -382,11 +382,11 @@ function fieldHtml(field, value, viewOnly) {
   if (lineBoxes.length) {
     const values = String(value || '').replace(/\r\n?/g, '\n').split('\n');
     return lineBoxes.map((box, index) => {
-      const style = `left:${box.x}%;top:${box.y}%;width:${box.w}%;height:${box.h || field.line_height || 2.3}%;text-align:${field.align || 'right'};direction:${field.direction || 'rtl'};font-weight:${fontWeight};`;
+      const style = `left:${box.x}%;top:${box.y}%;width:${box.w}%;height:${box.h || field.line_height || 2.3}%;text-align:${field.align || 'right'};direction:${field.direction || 'ltr'};font-weight:${fontWeight};`;
       return `<input class="template-field template-line-field" type="text" data-field="${field.key}" data-field-line="${index}" data-field-lines="${lineBoxes.length}" data-field-type="line" data-base-font-size="${baseFontSize}" style="${style}" value="${escapeHtml(values[index] || '')}" ${disabled}>`;
     }).join('');
   }
-  const style = `left:${field.x}%;top:${field.y}%;width:${field.w}%;height:${field.h}%;text-align:${field.align || 'center'};direction:${field.direction || 'rtl'};font-weight:${fontWeight};`;
+  const style = `left:${field.x}%;top:${field.y}%;width:${field.w}%;height:${field.h}%;text-align:${field.align || 'center'};direction:${field.direction || 'ltr'};font-weight:${fontWeight};`;
   const common = `data-field="${field.key}" data-field-type="${field.type || 'text'}" data-base-font-size="${baseFontSize}" style="${style}"`;
   if (field.type === 'textarea') return `<textarea class="template-field" ${common} ${disabled}>${escapeHtml(value || '')}</textarea>`;
   if (field.type === 'checkbox') return `<label class="template-field template-checkbox" data-field-type="checkbox" data-base-font-size="${baseFontSize}" style="${style}"><input type="checkbox" data-field="${field.key}" ${value ? 'checked' : ''} ${disabled}></label>`;

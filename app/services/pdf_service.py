@@ -21,6 +21,32 @@ A4_SIZE = (2480, 3508)
 BASE_EDITOR_WIDTH = 794
 
 
+ARABIC_RANGES = (
+    (0x0600, 0x06FF),
+    (0x0750, 0x077F),
+    (0x08A0, 0x08FF),
+    (0xFB50, 0xFDFF),
+    (0xFE70, 0xFEFF),
+)
+
+
+def _has_arabic(text: str) -> bool:
+    return any(start <= ord(char) <= end for char in text for start, end in ARABIC_RANGES)
+
+
+def arabic_rendering_status() -> dict[str, Any]:
+    """Expose the state of the shaping engine used for Arabic/RTL output.
+
+    RAQM is required for correct Arabic contextual shaping and BiDi ordering in
+    Pillow. The production Docker image installs and verifies it at build time.
+    """
+    return {
+        "raqm": bool(features.check("raqm")),
+        "harfbuzz": bool(features.check("harfbuzz")),
+        "fribidi": bool(features.check("fribidi")),
+    }
+
+
 def _field_text(value: Any, field_type: str) -> str:
     if field_type == "checkbox":
         return "✓" if value in (True, 1, "1", "true", "on", "yes") else ""
@@ -29,31 +55,67 @@ def _field_text(value: Any, field_type: str) -> str:
     return str(value).strip()
 
 
-def _find_font(size: int, *, bold: bool = True) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+def _find_font(
+    size: int,
+    *,
+    bold: bool = True,
+    direction: str = "ltr",
+) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    # Prefer fonts designed for Arabic when drawing RTL fields. This keeps
+    # Arabic glyph proportions stable on Linux/Render while preserving the
+    # Windows Arial/Segoe fallbacks used by the desktop build.
+    arabic_regular = [
+        # These fonts contain Arabic + Latin + digits/symbols in one file,
+        # which is important for mixed strings such as Arabic text with 350,000.
+        Path(r"C:\\Windows\\Fonts\\arial.ttf"),
+        Path(r"C:\\Windows\\Fonts\\segoeui.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        Path("/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf"),
+        Path("/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf"),
+    ]
+    arabic_bold = [
+        Path(r"C:\\Windows\\Fonts\\arialbd.ttf"),
+        Path(r"C:\\Windows\\Fonts\\segoeuib.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        Path("/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf"),
+        Path("/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf"),
+    ]
     regular = [
-        Path(r"C:\Windows\Fonts\arial.ttf"),
-        Path(r"C:\Windows\Fonts\segoeui.ttf"),
+        Path(r"C:\\Windows\\Fonts\\arial.ttf"),
+        Path(r"C:\\Windows\\Fonts\\segoeui.ttf"),
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
         Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"),
     ]
     bold_fonts = [
-        Path(r"C:\Windows\Fonts\arialbd.ttf"),
-        Path(r"C:\Windows\Fonts\segoeuib.ttf"),
+        Path(r"C:\\Windows\\Fonts\\arialbd.ttf"),
+        Path(r"C:\\Windows\\Fonts\\segoeuib.ttf"),
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
         Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"),
     ]
-    for candidate in (bold_fonts if bold else regular) + regular:
+    if direction == "rtl":
+        candidates = (arabic_bold if bold else arabic_regular) + arabic_regular + regular
+    else:
+        candidates = (bold_fonts if bold else regular) + regular
+
+    layout_engine = ImageFont.Layout.RAQM if features.check("raqm") else ImageFont.Layout.BASIC
+    for candidate in candidates:
         if candidate.exists():
-            return ImageFont.truetype(str(candidate), size=max(1, size))
+            return ImageFont.truetype(
+                str(candidate),
+                size=max(1, size),
+                layout_engine=layout_engine,
+            )
     return ImageFont.load_default()
 
 
 def _direction_kwargs(direction: str) -> dict[str, str]:
-    # Pillow wheels normally include libraqm on Windows. When unavailable, omit
-    # direction rather than crashing document generation.
-    if direction in {"rtl", "ltr"} and features.check("raqm"):
-        return {"direction": direction}
-    return {}
+    if direction not in {"rtl", "ltr"}:
+        return {}
+    if not features.check("raqm"):
+        return {}
+    if direction == "rtl":
+        return {"direction": "rtl", "language": "ar"}
+    return {"direction": "ltr"}
 
 
 def _text_bbox(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, direction: str) -> tuple[int, int, int, int]:
@@ -114,7 +176,7 @@ def _fit_text(
 ) -> tuple[ImageFont.ImageFont, list[str], int]:
     size = max(min_size, initial_size)
     while size >= min_size:
-        font = _find_font(size, bold=bold)
+        font = _find_font(size, bold=bold, direction=direction)
         lines = _wrap_text(draw, text, font, max_width, direction, multiline=multiline)
         line_height = max(size + max(4, round(size * 0.2)), 12)
         widths = [(_text_bbox(draw, line, font, direction)[2] - _text_bbox(draw, line, font, direction)[0]) for line in lines]
@@ -122,7 +184,7 @@ def _fit_text(
         if (not widths or max(widths) <= max_width) and total_height <= max_height:
             return font, lines, line_height
         size -= 1
-    font = _find_font(min_size, bold=bold)
+    font = _find_font(min_size, bold=bold, direction=direction)
     lines = _wrap_text(draw, text, font, max_width, direction, multiline=multiline)
     return font, lines, max(min_size + 4, 12)
 
@@ -140,6 +202,11 @@ def _draw_text_box(
     bold: bool = True,
 ) -> None:
     x, y, w, h = box
+    if direction == "rtl" and _has_arabic(value or "") and not features.check("raqm"):
+        raise RuntimeError(
+            "Arabic/RTL rendering is unavailable because Pillow RAQM support is missing. "
+            "Use the production Docker image or install a Pillow build with RAQM/Harfbuzz/FriBiDi."
+        )
     padding_x = max(8, round(w * 0.012))
     padding_y = max(4, round(h * 0.05))
     max_width = max(1, w - 2 * padding_x)
@@ -221,7 +288,7 @@ def _draw_configured_field(
         "font_size": max(18, round(css_size * canvas_width / BASE_EDITOR_WIDTH)),
         "min_font_size": max(14, round(min_css * canvas_width / BASE_EDITOR_WIDTH)),
         "align": field.get("align", "center"),
-        "direction": field.get("direction", "rtl"),
+        "direction": field.get("direction") or "ltr",
         "bold": field.get("font_weight", "bold") != "normal",
     }
     line_boxes = field.get("line_boxes") or []
@@ -397,7 +464,7 @@ def build_print_bundle(
     attachment_key = ",".join(f"{item['id']}:{item['sha256']}" for item in attachments)
     cache_key = hashlib.sha256(
         json.dumps(
-            {"document": document_id, "revision": revision, "attachments": attachment_key, "paper": "A4-300dpi-v2"},
+            {"document": document_id, "revision": revision, "attachments": attachment_key, "paper": "A4-300dpi-arabic-v3"},
             sort_keys=True,
         ).encode("utf-8")
     ).hexdigest()[:20]
