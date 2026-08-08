@@ -1,50 +1,30 @@
-# Ziad Invoices Professional v3.3.4 — Build Report
+# Ziad Invoices Professional v3.3.8 — Build Report
 
-## Arabic/RTL production fix
+## Scope
 
-- Correct Arabic contextual shaping and right-to-left/BiDi ordering in generated PDFs.
-- Pillow now loads RAQM as the layout engine when available and passes `direction=rtl` plus `language=ar` for Arabic fields.
-- Linux/Render prefers a cross-script Arabic-capable font (DejaVu Sans), with Arial/Segoe UI on Windows and Noto Arabic fallbacks.
-- The production Docker image installs RAQM, HarfBuzz and FriBiDi development libraries and forces Pillow 12.2.0 to build from source against them.
-- Docker build performs a hard RAQM/Harfbuzz/FriBiDi verification before deployment.
-- If a non-RAQM runtime attempts to print real Arabic text, PDF generation stops with a clear error instead of producing reversed/unjoined Arabic.
-- Browser editor fields use `unicode-bidi: plaintext` and explicit field directions for cleaner mixed Arabic/number text.
-- Print cache generation key was bumped so previously generated broken Arabic PDFs are not reused.
-- `/api/health` and system status now report Arabic rendering capabilities.
+v3.3.8 fixes the exact HTML template preview bridge used by the document editor. It keeps the v3.3.7 zoom controls and v3.3.6 full-A4 fit behavior.
 
-## Preserved behavior
+## Fixed
 
-- Exact field positions from v3.3.3 remain unchanged.
-- Official PDF templates remain byte-for-byte unchanged.
-- Official Word templates remain byte-for-byte unchanged.
-- Automatic numbering, attachments, view/edit/print/permanent-delete, users, audit, dashboard, Render and Supabase support remain intact.
-- No demo users, documents, attachments or customer data are included.
+- Payment Request (`PR`) no longer opens as an oversized/cropped template.
+- Payment Voucher (`PV`) no longer appears as a blank white A4 page.
+- Vehicle Maintenance (`VM`) no longer appears as a blank white A4 page.
+- Multi-line field navigation no longer calls `querySelector('')` on the last line.
+- RTL iframe geometry is normalized to LTR only for page placement, while the original template root writing direction is preserved for Arabic content.
+- The inner HTML template now scales using its true `offsetWidth`/`offsetHeight`, not a transformed bounding rectangle.
+- Both width and height are used when fitting the inner template into the editor iframe.
+- Template-local transforms cannot overwrite the editor preview scale.
 
-## Verification performed
+## Preserved
 
-- Python compilation: passed.
-- JavaScript syntax check: passed.
-- Automated API/PDF/UI/alignment/Arabic tests: 8/8 passed.
-- Arabic render preview using `محمد علي حسن` and mixed Arabic/Latin/digits: passed visually.
-- Runtime shaping features in the test environment: RAQM=True, HarfBuzz=True, FriBiDi=True.
-- Original Word template SHA-256 checks: passed.
-- A4 Word template SHA-256 checks: passed.
-- Official PDF template SHA-256 checks: passed.
+- The four uploaded HTML template files are byte-for-byte unchanged.
+- Zoom remains 50%–250% and editor-only.
+- Print output remains A4 at original template dimensions.
+- No database schema or Supabase change is required.
 
-## Render verification after deploy
+## Verification completed
 
-Open `/api/health` and confirm:
-
-```json
-{
-  "ok": true,
-  "version": "3.3.4",
-  "arabic_rendering": {
-    "raqm": true,
-    "harfbuzz": true,
-    "fribidi": true
-  }
-}
-```
-
-If any of the three shaping values is false, do not use the deployment for production printing.
+- `node --check app/static/app.js` — PASS.
+- Automated Python test suite — 9/9 PASS.
+- Browser regression rendering of PR/PV/VM/RV in a narrow iframe — all four roots visible and fitted to the page bounds.
+- HTML template SHA-256 values match the v3.3.7 originals.

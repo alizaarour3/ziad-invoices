@@ -12,6 +12,11 @@ const state = {
   currentDocument: null,
   dirty: false,
   sidebarCollapsed: localStorage.getItem('ziad_sidebar_collapsed') === '1',
+  editorViewportFit: null,
+  editorViewportFitCleanup: null,
+  editorZoom: 1,
+  editorZoomAnchor: null,
+  editorDocumentId: null,
 };
 
 const ICONS = {
@@ -213,6 +218,11 @@ function wireDocumentActions(scope = root) {
 }
 
 function shell(title, content, {active = '', fullWidth = false} = {}) {
+  if (state.editorViewportFitCleanup) {
+    state.editorViewportFitCleanup();
+    state.editorViewportFitCleanup = null;
+    state.editorViewportFit = null;
+  }
   const user = state.user || {};
   const adminLinks = user.role === 'admin' ? `
     <div class="nav-label">الإدارة</div>
@@ -228,7 +238,7 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
       <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-head">
-          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.4</span></div></div>
+          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.8</span></div></div>
           <button id="sidebar-close" class="btn btn-icon btn-link sidebar-close" aria-label="إغلاق القائمة">${icon('close')}</button>
         </div>
         <nav class="sidebar-nav">
@@ -254,6 +264,8 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
     state.sidebarCollapsed = !state.sidebarCollapsed;
     localStorage.setItem('ziad_sidebar_collapsed', state.sidebarCollapsed ? '1' : '0');
     appShell.classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
+    requestAnimationFrame(() => state.editorViewportFit?.());
+    setTimeout(() => state.editorViewportFit?.(), 230);
   });
   document.getElementById('sidebar-close').addEventListener('click', closeMobileSidebar);
   document.getElementById('sidebar-backdrop').addEventListener('click', closeMobileSidebar);
@@ -416,6 +428,128 @@ function wireLineFieldNavigation(page) {
   });
 }
 
+const A4_PREVIEW_WIDTH = 794;
+const A4_PREVIEW_RATIO = 210 / 297;
+const EDITOR_ZOOM_MIN = 0.5;
+const EDITOR_ZOOM_MAX = 2.5;
+const EDITOR_ZOOM_STEP = 0.25;
+
+function clampEditorZoom(value) {
+  return Math.min(EDITOR_ZOOM_MAX, Math.max(EDITOR_ZOOM_MIN, Number(value) || 1));
+}
+
+function updateEditorZoomControls() {
+  const value = clampEditorZoom(state.editorZoom);
+  const label = document.getElementById('template-zoom-value');
+  const zoomOut = document.getElementById('template-zoom-out');
+  const zoomIn = document.getElementById('template-zoom-in');
+  const fit = document.getElementById('template-zoom-fit');
+  if (label) label.textContent = `${Math.round(value * 100)}%`;
+  if (zoomOut) zoomOut.disabled = value <= EDITOR_ZOOM_MIN + 0.001;
+  if (zoomIn) zoomIn.disabled = value >= EDITOR_ZOOM_MAX - 0.001;
+  if (fit) fit.classList.toggle('active', Math.abs(value - 1) < 0.001);
+}
+
+function captureEditorZoomAnchor() {
+  const stage = document.querySelector('.editor-stage.fit-a4-stage');
+  if (!stage) return null;
+  return {
+    x: stage.scrollWidth > 0 ? (stage.scrollLeft + stage.clientWidth / 2) / stage.scrollWidth : 0.5,
+    y: stage.scrollHeight > 0 ? (stage.scrollTop + stage.clientHeight / 2) / stage.scrollHeight : 0.5,
+  };
+}
+
+function setEditorZoom(value) {
+  state.editorZoomAnchor = captureEditorZoomAnchor();
+  state.editorZoom = clampEditorZoom(value);
+  updateEditorZoomControls();
+  state.editorViewportFit?.();
+}
+
+function fitDocumentTemplateToViewport(page, frame, config) {
+  if (!page) return;
+  const stage = page.closest('.editor-stage');
+  const canvas = page.closest('.template-zoom-canvas');
+  if (!stage || !canvas) return;
+
+  const stageStyle = window.getComputedStyle(stage);
+  const horizontalPadding = (parseFloat(stageStyle.paddingLeft) || 0) + (parseFloat(stageStyle.paddingRight) || 0);
+  const verticalPadding = (parseFloat(stageStyle.paddingTop) || 0) + (parseFloat(stageStyle.paddingBottom) || 0);
+  const viewportHeight = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 900;
+  const stageTop = Math.max(0, stage.getBoundingClientRect().top);
+  const availableWidth = Math.max(1, stage.clientWidth - horizontalPadding);
+  const availableHeight = Math.max(1, viewportHeight - stageTop - verticalPadding - 14);
+
+  // Base size always keeps the whole A4 form visible. Zoom is applied only to the editor preview.
+  const fittedWidth = Math.max(1, Math.min(A4_PREVIEW_WIDTH, availableWidth, availableHeight * A4_PREVIEW_RATIO));
+  const fittedHeight = fittedWidth / A4_PREVIEW_RATIO;
+  const zoom = clampEditorZoom(state.editorZoom);
+  const zoomedWidth = fittedWidth * zoom;
+  const zoomedHeight = fittedHeight * zoom;
+
+  page.style.width = `${fittedWidth.toFixed(2)}px`;
+  page.style.height = `${fittedHeight.toFixed(2)}px`;
+  page.style.aspectRatio = 'auto';
+  page.style.transformOrigin = 'top left';
+  page.style.transform = `scale(${zoom})`;
+  page.dataset.viewportFit = '1';
+  page.dataset.editorZoom = String(zoom);
+
+  canvas.style.width = `${zoomedWidth.toFixed(2)}px`;
+  canvas.style.height = `${zoomedHeight.toFixed(2)}px`;
+  stage.style.height = `${Math.max(210, viewportHeight - stageTop - 14).toFixed(2)}px`;
+  stage.classList.add('fit-a4-stage');
+  stage.classList.toggle('zoomed-a4-stage', zoom > 1.001);
+
+  if (frame && config) scaleHtmlTemplateFrame(frame, config);
+  else applyTemplateScale(page);
+
+  const anchor = state.editorZoomAnchor;
+  if (anchor) {
+    state.editorZoomAnchor = null;
+    requestAnimationFrame(() => {
+      const maxLeft = Math.max(0, stage.scrollWidth - stage.clientWidth);
+      const maxTop = Math.max(0, stage.scrollHeight - stage.clientHeight);
+      const left = anchor.x * stage.scrollWidth - stage.clientWidth / 2;
+      const top = anchor.y * stage.scrollHeight - stage.clientHeight / 2;
+      stage.scrollLeft = Math.min(maxLeft, Math.max(0, left));
+      stage.scrollTop = Math.min(maxTop, Math.max(0, top));
+    });
+  }
+  updateEditorZoomControls();
+}
+
+function installDocumentViewportFit(page, frame, config) {
+  if (!page) return () => {};
+  const stage = page.closest('.editor-stage');
+  const main = document.querySelector('.main');
+  let raf = 0;
+  const fit = () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => fitDocumentTemplateToViewport(page, frame, config));
+  };
+
+  const observer = window.ResizeObserver ? new ResizeObserver(fit) : null;
+  if (observer) {
+    if (main) observer.observe(main);
+    if (stage?.parentElement) observer.observe(stage.parentElement);
+  }
+  window.addEventListener('resize', fit, {passive:true});
+  window.visualViewport?.addEventListener('resize', fit, {passive:true});
+  window.visualViewport?.addEventListener('scroll', fit, {passive:true});
+  fit();
+
+  state.editorViewportFit = fit;
+  return () => {
+    cancelAnimationFrame(raf);
+    observer?.disconnect();
+    window.removeEventListener('resize', fit);
+    window.visualViewport?.removeEventListener('resize', fit);
+    window.visualViewport?.removeEventListener('scroll', fit);
+    if (state.editorViewportFit === fit) state.editorViewportFit = null;
+  };
+}
+
 function applyTemplateScale(page) {
   if (!page) return;
   const scale = Math.max(0.35, page.clientWidth / 794);
@@ -429,28 +563,224 @@ function applyTemplateScale(page) {
   });
 }
 
+function htmlFieldSelectors(field) {
+  if (Array.isArray(field.html_selectors) && field.html_selectors.length) return field.html_selectors;
+  return field.html_selector ? [field.html_selector] : [];
+}
+
+function setHtmlElementValue(element, value, fieldType) {
+  if (!element) return;
+  if (fieldType === 'checkbox' || element.type === 'checkbox') { element.checked = Boolean(value); return; }
+  const text = value == null ? '' : String(value);
+  if (element.matches('input, textarea, select')) element.value = text;
+  else element.textContent = text;
+}
+
+function getHtmlElementValue(element, fieldType) {
+  if (!element) return fieldType === 'checkbox' ? false : '';
+  if (fieldType === 'checkbox' || element.type === 'checkbox') return Boolean(element.checked);
+  if (element.matches('input, textarea, select')) return element.value || '';
+  return element.textContent || '';
+}
+
+function applyHtmlTemplateGuide(frame, visible) {
+  const frameDoc = frame?.contentDocument;
+  if (!frameDoc) return;
+  frameDoc.documentElement.classList.toggle('ziad-field-guide', Boolean(visible));
+}
+
+function scaleHtmlTemplateFrame(frame, config) {
+  const frameDoc = frame?.contentDocument;
+  if (!frameDoc) return;
+  const root = frameDoc.querySelector(config.html_root || '.page, .sheet, main');
+  if (!root) return;
+
+  const html = frameDoc.documentElement;
+  const body = frameDoc.body;
+
+  // The uploaded templates are authored with different RTL/LTR page shells.
+  // In a narrow iframe, RTL block layout can place a fixed-width A4 root at a
+  // negative X position, which made PV/VM look like a blank white page. Keep
+  // the document shell LTR for geometry, while preserving the template root's
+  // original writing direction for its Arabic content.
+  if (!root.dataset.ziadOriginalDirection) {
+    root.dataset.ziadOriginalDirection = frameDoc.defaultView?.getComputedStyle(root).direction || 'ltr';
+  }
+  html.style.direction = 'ltr';
+  html.style.overflow = 'hidden';
+  body.style.margin = '0';
+  body.style.padding = '0';
+  body.style.display = 'block';
+  body.style.minHeight = '0';
+  body.style.background = '#fff';
+  body.style.overflow = 'hidden';
+  body.style.direction = 'ltr';
+  body.style.textAlign = 'left';
+  body.style.justifyContent = 'flex-start';
+  body.style.alignItems = 'flex-start';
+
+  root.dataset.ziadTemplateRoot = '1';
+  root.style.direction = root.dataset.ziadOriginalDirection;
+  root.style.margin = '0';
+  root.style.left = '0';
+  root.style.right = 'auto';
+  root.style.top = '0';
+
+  let naturalWidth = Number(root.dataset.ziadNaturalWidth || 0);
+  let naturalHeight = Number(root.dataset.ziadNaturalHeight || 0);
+  if (!naturalWidth || !naturalHeight) {
+    // offsetWidth/offsetHeight are intentionally used before getBoundingClientRect:
+    // some uploaded HTML files contain their own responsive transform, and a
+    // transformed bounding rect is not the true design size.
+    const computed = frameDoc.defaultView?.getComputedStyle(root);
+    naturalWidth = root.offsetWidth || parseFloat(computed?.width || '0') || root.getBoundingClientRect().width || 794;
+    naturalHeight = root.offsetHeight || parseFloat(computed?.height || '0') || root.getBoundingClientRect().height || 1123;
+    root.dataset.ziadNaturalWidth = String(naturalWidth);
+    root.dataset.ziadNaturalHeight = String(naturalHeight);
+  }
+
+  const availableWidth = frame.clientWidth || 794;
+  const availableHeight = frame.clientHeight || 1123;
+  const scale = Math.max(0.01, Math.min(1, availableWidth / naturalWidth, availableHeight / naturalHeight));
+
+  // The bridge stylesheet applies this with !important, so template-local
+  // resize scripts cannot overwrite the editor preview scale (notably PR).
+  root.style.setProperty('--ziad-template-scale', String(scale));
+  root.style.transformOrigin = 'top left';
+  root.style.transform = `scale(${scale})`;
+  root.dataset.ziadPreviewScale = String(scale);
+}
+
+function configureHtmlTemplateFrame(frame, doc, viewOnly) {
+  const frameDoc = frame.contentDocument;
+  if (!frameDoc) return;
+  let helperStyle = frameDoc.getElementById('ziad-template-bridge-style');
+  if (!helperStyle) {
+    helperStyle = frameDoc.createElement('style');
+    helperStyle.id = 'ziad-template-bridge-style';
+    helperStyle.textContent = `
+      [data-ziad-field="1"]{transition:outline .12s ease,background-color .12s ease;}
+      html.ziad-field-guide [data-ziad-field="1"]{outline:1px dashed rgba(14,107,79,.62)!important;outline-offset:-1px;background-color:rgba(255,255,255,.18)!important;}
+      [data-ziad-viewonly="1"]{pointer-events:none!important;opacity:1!important;color:#111!important;-webkit-text-fill-color:#111!important;}
+      [data-ziad-template-root="1"]{transform:scale(var(--ziad-template-scale,1))!important;transform-origin:top left!important;margin:0!important;}
+    `;
+    frameDoc.head.appendChild(helperStyle);
+  }
+
+  doc.type.config.fields.forEach(field => {
+    const selectors = htmlFieldSelectors(field);
+    if (!selectors.length) return;
+    const rawValue = doc.fields[field.key];
+    const lineValues = selectors.length > 1 ? String(rawValue || '').replace(/\r\n?/g,'\n').split('\n') : [rawValue];
+    selectors.forEach((selector, index) => {
+      const element = frameDoc.querySelector(selector);
+      if (!element) return;
+      element.dataset.ziadField = '1';
+      element.dataset.ziadFieldKey = field.key;
+      setHtmlElementValue(element, lineValues[index] ?? '', field.type);
+      const locked = viewOnly || field.readonly || field.html_readonly;
+      if (element.matches('input, textarea')) {
+        if (element.type === 'checkbox') element.disabled = locked;
+        else element.readOnly = locked;
+      } else if (element.hasAttribute('contenteditable')) {
+        element.setAttribute('contenteditable', locked ? 'false' : 'true');
+      }
+      element.dataset.ziadViewonly = locked ? '1' : '0';
+      if (!locked) {
+        element.addEventListener('input', () => { state.dirty = true; });
+        element.addEventListener('change', () => { state.dirty = true; });
+      }
+    });
+    if (!viewOnly && selectors.length > 1) {
+      selectors.forEach((selector, index) => {
+        const nextSelector = selectors[index + 1];
+        if (!nextSelector) return;
+        const element = frameDoc.querySelector(selector);
+        const next = frameDoc.querySelector(nextSelector);
+        if (!element || !next) return;
+        element.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === 'ArrowDown') { event.preventDefault(); next.focus(); }
+        });
+      });
+    }
+  });
+
+  const guide = document.getElementById('field-guide');
+  applyHtmlTemplateGuide(frame, !viewOnly && (guide?.checked ?? true));
+  scaleHtmlTemplateFrame(frame, doc.type.config);
+  frame.dataset.ready = '1';
+  const saveButton = document.getElementById('save-document');
+  if (saveButton) saveButton.disabled = false;
+}
+
+function collectHtmlTemplateFields(frame, config) {
+  const frameDoc = frame?.contentDocument;
+  if (!frameDoc) return {};
+  const result = {};
+  config.fields.forEach(field => {
+    const selectors = htmlFieldSelectors(field);
+    if (!selectors.length) return;
+    const values = selectors.map(selector => getHtmlElementValue(frameDoc.querySelector(selector), field.type));
+    if (field.type === 'checkbox') result[field.key] = Boolean(values[0]);
+    else if (selectors.length > 1) result[field.key] = values.map(value => String(value || '')).join('\n').replace(/\n+$/g,'');
+    else result[field.key] = values[0] == null ? '' : String(values[0]);
+  });
+  return result;
+}
+
 async function renderDocumentEditor(id, mode) {
   pageLoading(mode === 'view' ? 'عرض المستند' : 'تعديل المستند');
   const doc = await api(`/api/documents/${id}`);
   state.currentDocument = doc;
   state.dirty = false;
+  if (state.editorDocumentId !== id) {
+    state.editorZoom = 1;
+    state.editorZoomAnchor = null;
+    state.editorDocumentId = id;
+  }
   const viewOnly = mode === 'view' || state.user.role === 'viewer';
-  const fields = doc.type.config.fields.map(field => fieldHtml(field, doc.fields[field.key], viewOnly)).join('');
+  const useHtmlTemplate = doc.type.config.template_engine === 'html' && Boolean(doc.type.config.html_template);
+  const fields = useHtmlTemplate ? '' : doc.type.config.fields.map(field => fieldHtml(field, doc.fields[field.key], viewOnly)).join('');
+  const templateMarkup = useHtmlTemplate
+    ? `<iframe id="template-frame" class="html-template-frame" src="/form-templates/${encodeURIComponent(doc.type.config.html_template)}" title="${escapeHtml(doc.type.name_ar)}"></iframe>`
+    : `<img class="template-bg" src="${doc.type.image_url}" alt="${escapeHtml(doc.type.name_ar)}">${fields}`;
   const attachments = attachmentsHtml(doc.attachments || [], viewOnly);
   const primaryAction = viewOnly ? (state.user.role !== 'viewer' ? `<button id="edit-document" class="btn btn-primary">${icon('edit')} تعديل</button>` : '') : `<select id="document-status" class="control compact status-control"><option value="saved" ${doc.status === 'saved' ? 'selected' : ''}>محفوظ</option><option value="draft" ${doc.status === 'draft' ? 'selected' : ''}>مسودة</option></select><button id="save-document" class="btn btn-primary">${icon('save')} حفظ</button>`;
   const deleteAction = state.user.role === 'admin' ? `<button type="button" class="btn btn-danger-soft" id="delete-document" title="حذف المستند نهائياً">${icon('trash')}<span>حذف نهائي</span></button>` : '';
   shell(`${viewOnly ? 'عرض' : 'تعديل'} ${doc.type.name_ar}`, `
     <div class="page-header document-header"><div><span class="eyebrow">${escapeHtml(doc.type.name_ar)}</span><h1>${escapeHtml(doc.document_number)}</h1><p>الكتابة في طبقة مستقلة، والقالب الرسمي يبقى دون تعديل.</p></div><div class="page-actions"><a class="btn btn-secondary" href="#/documents/${doc.type.code}">${icon('chevron')} رجوع للقائمة</a></div></div>
-    <div class="document-commandbar"><div class="commandbar-primary">${primaryAction}<button id="print-document" class="btn btn-secondary">${icon('print')} طباعة</button></div><div class="commandbar-secondary">${!viewOnly ? `<label class="field-guide-toggle"><input id="field-guide" type="checkbox" checked><span>إظهار حدود الكتابة</span></label>` : ''}${deleteAction}</div></div>
-    <div class="editor-grid"><div class="editor-stage"><div id="template-page" class="template-page ${viewOnly ? 'view-only clean' : ''}"><img class="template-bg" src="${doc.type.image_url}" alt="${escapeHtml(doc.type.name_ar)}">${fields}</div></div><aside class="editor-side">
+    <div class="document-commandbar"><div class="commandbar-primary">${primaryAction}<button id="print-document" class="btn btn-secondary">${icon('print')} طباعة</button></div><div class="commandbar-secondary"><div class="template-zoom-controls" aria-label="تكبير وتصغير النموذج" dir="ltr"><button type="button" class="template-zoom-button" id="template-zoom-out" title="تصغير النموذج" aria-label="تصغير النموذج">−</button><span class="template-zoom-value" id="template-zoom-value">100%</span><button type="button" class="template-zoom-button" id="template-zoom-in" title="تكبير النموذج" aria-label="تكبير النموذج">+</button><button type="button" class="template-zoom-fit active" id="template-zoom-fit" title="إظهار النموذج كاملاً داخل الشاشة">ملاءمة</button></div>${!viewOnly ? `<label class="field-guide-toggle"><input id="field-guide" type="checkbox" checked><span>إظهار حدود الكتابة</span></label>` : ''}${deleteAction}</div></div>
+    <div class="editor-grid"><div class="editor-stage"><div class="template-zoom-canvas" id="template-zoom-canvas"><div id="template-page" class="template-page ${useHtmlTemplate ? 'html-template-host' : ''} ${viewOnly ? 'view-only clean' : ''}">${templateMarkup}</div></div></div><aside class="editor-side">
       <section class="panel"><div class="panel-head"><h3>معلومات المستند</h3>${statusBadge(doc.status)}</div><div class="panel-body"><div class="lock-note">${icon('lock')} القالب الرسمي محفوظ كما هو، ولا يتم تعديل أي صورة أو خط أو نقطة داخله.</div><div class="meta-list" style="margin-top:14px"><div class="meta-row"><span>أنشأه</span><strong>${escapeHtml(doc.created_by_name)}</strong></div><div class="meta-row"><span>آخر تعديل</span><strong>${escapeHtml(doc.updated_by_name)}</strong></div><div class="meta-row"><span>تاريخ الإنشاء</span><strong>${formatDate(doc.created_at, true)}</strong></div><div class="meta-row"><span>الإصدار</span><strong>${doc.revision}</strong></div><div class="meta-row"><span>مرات الطباعة</span><strong>${doc.print_count}</strong></div></div></div></section>
       <section class="panel attachments-panel"><div class="panel-head"><div><h3>المرفقات</h3><p>${doc.attachments.length} ملف مرتبط</p></div><span class="badge badge-saved">${doc.attachments.length}</span></div><div class="panel-body">${!viewOnly ? `<div class="attachment-uploader" id="attachment-dropzone"><input id="attachment-input" type="file" multiple hidden><div class="attachment-uploader-icon">${icon('upload')}</div><div class="attachment-uploader-copy"><strong>إضافة مرفقات</strong><span>اسحب الملفات إلى هذه المساحة</span><small>PDF، Word، Excel والصور · حتى 100MB</small></div><button type="button" class="btn btn-primary attachment-browse" id="attachment-browse">اختيار ملفات</button></div><div id="attachment-upload-status" class="attachment-upload-status" hidden></div>` : ''}<div class="attachment-list-head"><span>الملفات المحفوظة</span></div><div class="attachments" id="attachments-list">${attachments}</div></div></section>
     </aside></div>`, {active:doc.type.code, fullWidth:true});
   const page = document.getElementById('template-page');
-  requestAnimationFrame(() => applyTemplateScale(page));
-  if (window.ResizeObserver) { const observer = new ResizeObserver(() => applyTemplateScale(page)); observer.observe(page); }
-  else window.addEventListener('resize', () => applyTemplateScale(page), {passive:true});
-  document.getElementById('field-guide')?.addEventListener('change', event => page.classList.toggle('clean', !event.target.checked));
+  const frame = document.getElementById('template-frame');
+  if (useHtmlTemplate && frame) {
+    const saveButton = document.getElementById('save-document');
+    if (saveButton) saveButton.disabled = true;
+    const initializeFrame = () => {
+      configureHtmlTemplateFrame(frame, doc, viewOnly);
+      state.editorViewportFit?.();
+    };
+    frame.addEventListener('load', initializeFrame, {once:true});
+    if (frame.contentDocument?.readyState === 'complete') initializeFrame();
+  }
+  state.editorViewportFitCleanup = installDocumentViewportFit(page, useHtmlTemplate ? frame : null, useHtmlTemplate ? doc.type.config : null);
+  const zoomOutButton = document.getElementById('template-zoom-out');
+  const zoomInButton = document.getElementById('template-zoom-in');
+  const zoomFitButton = document.getElementById('template-zoom-fit');
+  [zoomOutButton, zoomInButton, zoomFitButton].filter(Boolean).forEach(button => {
+    button.addEventListener('mousedown', event => event.preventDefault());
+  });
+  zoomOutButton?.addEventListener('click', () => setEditorZoom(state.editorZoom - EDITOR_ZOOM_STEP));
+  zoomInButton?.addEventListener('click', () => setEditorZoom(state.editorZoom + EDITOR_ZOOM_STEP));
+  zoomFitButton?.addEventListener('click', () => setEditorZoom(1));
+  updateEditorZoomControls();
+  document.getElementById('field-guide')?.addEventListener('change', event => {
+    if (useHtmlTemplate && frame) applyHtmlTemplateGuide(frame, event.target.checked);
+    else page.classList.toggle('clean', !event.target.checked);
+  });
   document.getElementById('print-document').addEventListener('click', () => openPrintModal(state.currentDocument));
   document.getElementById('edit-document')?.addEventListener('click', () => navigate(`/documents/${id}/edit`));
   document.getElementById('delete-document')?.addEventListener('click', () => confirmDeleteDocument(id, doc.type.code));
@@ -470,6 +800,11 @@ async function renderDocumentEditor(id, mode) {
 }
 
 function collectFields() {
+  const htmlFrame = document.getElementById('template-frame');
+  if (htmlFrame && state.currentDocument?.type?.config?.template_engine === 'html') {
+    if (htmlFrame.dataset.ready !== '1') throw new Error('القالب ما زال قيد التحميل، حاول الحفظ بعد لحظة.');
+    return collectHtmlTemplateFields(htmlFrame, state.currentDocument.type.config);
+  }
   const result = {};
   const lineGroups = new Map();
   document.querySelectorAll('#template-page [data-field]').forEach(input => {

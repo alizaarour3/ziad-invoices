@@ -1,4 +1,4 @@
-# نشر Ziad Invoices Professional 3.3.4 على Render وSupabase
+# نشر Ziad Invoices Professional 3.3.8 على Render وSupabase
 
 يستخدم النشر السحابي:
 
@@ -26,7 +26,7 @@
 ```powershell
 git init
 git add .
-git commit -m "Ziad Invoices 3.3.4"
+git commit -m "Ziad Invoices 3.3.8"
 git branch -M main
 git remote add origin YOUR_PRIVATE_REPOSITORY
 git push -u origin main
@@ -86,7 +86,7 @@ scripts/migrate_sqlite_to_supabase.py
 https://YOUR-SERVICE.onrender.com/api/health
 ```
 
-يجب أن يعيد الإصدار `3.3.4` وحالة سليمة. راجع Logs في Render عند أي فشل في قاعدة البيانات أو Storage.
+يجب أن يعيد الإصدار `3.3.8` وحالة سليمة. راجع Logs في Render عند أي فشل في قاعدة البيانات أو Storage.
 
 ## 8. الحماية
 
@@ -95,3 +95,8 @@ https://YOUR-SERVICE.onrender.com/api/health
 - استخدم كلمة مرور قوية لقاعدة البيانات والمدير.
 - فعّل النسخ الاحتياطية المناسبة في Supabase، ونزّل نسخة من داخل النظام دورياً.
 - اختبر الاستعادة قبل الاعتماد التجاري.
+
+
+## متطلبات 3.3.8
+
+Dockerfile يثبت Chromium، ويستخدم التطبيق Playwright لتجهيز القوالب HTML الرسمية للطباعة. لا تشغّل Render بدون Docker runtime لهذا الإصدار.

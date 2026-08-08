@@ -245,6 +245,10 @@ tr:hover td { background:#fbfaf5; }
 /* ---------- Template editor ---------- */
 .editor-grid { display:grid; grid-template-columns:minmax(600px, 1fr) 350px; gap:20px; align-items:start; direction:ltr; }
 .editor-stage { background:#e7e2d3; border-radius:var(--radius); padding:22px; min-height:500px; overflow:auto; direction:ltr; }
+.editor-stage.fit-a4-stage { min-height:0; overflow:auto; display:block; overscroll-behavior:contain; scrollbar-gutter:stable; }
+.editor-stage.fit-a4-stage.zoomed-a4-stage { cursor:default; }
+.template-zoom-canvas { position:relative; margin:0 auto; flex:0 0 auto; }
+.template-zoom-canvas > .template-page { position:absolute; top:0; left:0; margin:0; }
 .template-page {
   width:min(100%, 794px); aspect-ratio:210 / 297; position:relative; margin:0 auto; background:#fff;
   box-shadow:0 14px 44px rgba(19,33,26,.22); overflow:hidden; direction:ltr;
@@ -269,6 +273,14 @@ tr:hover td { background:#fbfaf5; }
 .meta-row span { color:var(--muted); }
 .editor-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .editor-actions .wide { grid-column:1 / -1; }
+.template-zoom-controls { display:inline-flex; align-items:center; gap:5px; padding:4px; border:1px solid var(--border); border-radius:12px; background:#fff; box-shadow:0 2px 8px rgba(19,33,26,.05); }
+.template-zoom-button,.template-zoom-fit { height:32px; border:0; border-radius:8px; background:var(--surface-2); color:var(--text); font:inherit; font-weight:900; cursor:pointer; transition:.15s ease; }
+.template-zoom-button { width:34px; font-size:21px; line-height:1; }
+.template-zoom-fit { padding:0 11px; font-size:11px; direction:rtl; }
+.template-zoom-button:hover,.template-zoom-fit:hover { background:var(--primary-soft); color:var(--primary-strong); }
+.template-zoom-button:disabled { opacity:.38; cursor:not-allowed; }
+.template-zoom-fit.active { background:var(--primary); color:#fff; }
+.template-zoom-value { min-width:50px; text-align:center; font-size:12px; font-weight:900; color:var(--primary-strong); user-select:none; }
 .lock-note { background:var(--primary-soft); color:var(--primary-strong); border:1px solid #c5e2d4; border-radius:var(--radius-sm); padding:10px 12px; font-size:12px; line-height:1.7; }
 
 /* ---------- Attachments ---------- */
@@ -526,6 +538,18 @@ a:focus-visible, button:focus-visible, .nav-item:focus-visible, .quick-card:focu
   body { background:#fff; }
   .sidebar, .topbar, .editor-side, .page-header { display:none !important; }
   .app-shell, .main, .content, .editor-grid, .editor-stage { display:block; padding:0; margin:0; background:#fff; }
-  .template-page { width:210mm !important; height:297mm !important; aspect-ratio:auto; box-shadow:none; page-break-after:avoid; }
+  .template-zoom-controls { display:none !important; }
+  .template-zoom-canvas { width:210mm !important; height:297mm !important; margin:0 !important; }
+  .template-page { position:relative !important; width:210mm !important; height:297mm !important; aspect-ratio:auto; box-shadow:none; page-break-after:avoid; transform:none !important; }
+  .editor-stage.fit-a4-stage { display:block; overflow:visible; height:auto !important; }
   .template-field { border:0 !important; background:transparent !important; }
+}
+
+/* ---------- Exact HTML document templates v3.3.8 ---------- */
+.template-page.html-template-host { overflow:hidden; background:#fff; }
+.html-template-frame {
+  position:absolute; inset:0; width:100%; height:100%; border:0; display:block; background:#fff;
+}
+@media print {
+  .html-template-frame { width:210mm !important; height:297mm !important; }
 }

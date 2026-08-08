@@ -170,10 +170,10 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.4'
+        assert status_data['version'] == '3.3.8'
         assert status_data['database']['ok'] is True
         assert status_data['counts']['documents'] == 1
-        assert len(status_data['templates']) == 10
+        assert len(status_data['templates']) == 14
         assert all(item['ok'] is True for item in status_data['templates'])
 
         backup = client.post('/api/system/backup', headers=headers)
@@ -188,8 +188,9 @@ def test_system_status_and_backup():
             assert 'templates/receipt-voucher.docx' in names
             assert 'templates/originals/receipt-voucher-original.docx' in names
             assert 'app/static/templates/receipt-voucher.png' in names
+            assert 'app/static/form-templates/receipt-voucher.html' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.4'
+            assert manifest['version'] == '3.3.8'
             assert manifest['files']
 
 
@@ -374,3 +375,30 @@ def test_arabic_rtl_rendering_engine_and_pdf_output():
     assert output.exists() and output.stat().st_size > 10_000
     reader = PdfReader(str(output))
     assert len(reader.pages) == 1
+
+
+def test_exact_html_templates_are_immutable_and_all_field_selectors_exist():
+    import hashlib
+    import json
+    from bs4 import BeautifulSoup
+
+    project = Path(__file__).resolve().parents[1]
+    config = json.loads((project / 'config' / 'templates.json').read_text(encoding='utf-8'))
+    expected_hashes = {}
+    for line in (project / 'HTML_TEMPLATE_HASHES.sha256').read_text(encoding='utf-8').splitlines():
+        digest, relative = line.split(maxsplit=1)
+        expected_hashes[relative] = digest
+
+    for code, item in config.items():
+        assert item['template_engine'] == 'html'
+        html_path = project / 'app' / 'static' / 'form-templates' / item['html_template']
+        relative = html_path.relative_to(project).as_posix()
+        assert html_path.exists()
+        assert hashlib.sha256(html_path.read_bytes()).hexdigest() == expected_hashes[relative]
+        soup = BeautifulSoup(html_path.read_text(encoding='utf-8'), 'html.parser')
+        assert soup.select_one(item['html_root']) is not None
+        for field in item['fields']:
+            selectors = field.get('html_selectors') or [field.get('html_selector')]
+            assert selectors and all(selectors), f"{code}:{field['key']} has no HTML selector"
+            for selector in selectors:
+                assert soup.select_one(selector) is not None, f"{code}:{field['key']} missing {selector}"

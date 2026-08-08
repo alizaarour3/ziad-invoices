@@ -12,7 +12,7 @@ from ..db import connect
 from ..settings import BACKUPS_DIR, DATABASE_BACKEND, DB_PATH, PROJECT_DIR, TEMPLATES_DIR
 from .storage_service import storage
 
-APP_VERSION = "3.3.4"
+APP_VERSION = "3.3.8"
 
 
 def _sha256(path: Path) -> str:
@@ -57,6 +57,7 @@ def template_integrity() -> list[dict]:
         "A4 production": _read_hash_manifest("TEMPLATE_HASHES.sha256"),
         "Original preserved": _read_hash_manifest("ORIGINAL_TEMPLATE_HASHES.sha256"),
         "Official PDF sources": _read_hash_manifest("PDF_TEMPLATE_HASHES.sha256"),
+        "Exact HTML templates": _read_hash_manifest("HTML_TEMPLATE_HASHES.sha256"),
     }
     results: list[dict] = []
     for category, expected in manifests.items():
@@ -138,9 +139,11 @@ def create_backup() -> Path:
         files += [(path, path.relative_to(PROJECT_DIR).as_posix()) for path in TEMPLATES_DIR.rglob("*.pdf")]
         static_templates = PROJECT_DIR / "app" / "static" / "templates"
         files += [(path, path.relative_to(PROJECT_DIR).as_posix()) for path in static_templates.glob("*.png")]
+        html_templates = PROJECT_DIR / "app" / "static" / "form-templates"
+        files += [(path, path.relative_to(PROJECT_DIR).as_posix()) for path in html_templates.glob("*.html")]
         config = PROJECT_DIR / "config" / "templates.json"
         files.append((config, "config/templates.json"))
-        for hash_name in ("TEMPLATE_HASHES.sha256", "ORIGINAL_TEMPLATE_HASHES.sha256", "PDF_TEMPLATE_HASHES.sha256"):
+        for hash_name in ("TEMPLATE_HASHES.sha256", "ORIGINAL_TEMPLATE_HASHES.sha256", "PDF_TEMPLATE_HASHES.sha256", "HTML_TEMPLATE_HASHES.sha256"):
             hash_path = PROJECT_DIR / hash_name
             if hash_path.exists():
                 files.append((hash_path, hash_name))
