@@ -12,7 +12,7 @@ from ..db import connect
 from ..settings import BACKUPS_DIR, DATABASE_BACKEND, DB_PATH, PROJECT_DIR, TEMPLATES_DIR
 from .storage_service import storage
 
-APP_VERSION = "3.3.8"
+APP_VERSION = "3.3.9"
 
 
 def _sha256(path: Path) -> str:
@@ -85,6 +85,7 @@ def _postgres_json_export(destination: Path) -> None:
     table_names = [
         "schema_meta",
         "users",
+        "user_page_permissions",
         "document_types",
         "number_sequences",
         "documents",

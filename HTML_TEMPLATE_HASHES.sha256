@@ -1,0 +1,5 @@
+f450bca434ad25b75c9d8fa19d91495197635874c612e5dcb6df617063d392d1  app/static/form-templates/payment-request.html
+035c190590819157d3475cb9857b3d3321e2ac62afea16a2e900d0241e4458ff  app/static/form-templates/payment-voucher.html
+698a4ece2fe899ad23cd11d451420cab82576ba8ff622bb67829b1146873d19c  app/static/form-templates/receipt-voucher.html
+8c32ce2e6716b94ef668aa28d4ec8283b217345db80d9e87bfaf6b4be923f86a  app/static/form-templates/vehicle-maintenance.html
+02560523c3cf78c0e4bd948e6b2961e38e10ae727deacd5c076c3783cb21ad48  app/static/form-templates/request-transfer.html

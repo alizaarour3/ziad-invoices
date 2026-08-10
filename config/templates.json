@@ -19,7 +19,9 @@
         "h": 2.68,
         "font_size": 18,
         "align": "center",
-        "readonly": true
+        "readonly": true,
+        "html_selector": "[data-key=\"no_rv\"]",
+        "html_readonly": true
       },
       {
         "key": "date",
@@ -30,7 +32,8 @@
         "w": 14.73,
         "h": 2.68,
         "font_size": 17,
-        "align": "center"
+        "align": "center",
+        "html_selector": "[data-key=\"date\"]"
       },
       {
         "key": "received_from",
@@ -44,7 +47,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 9,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[data-key=\"received_from\"]"
       },
       {
         "key": "receivable_type",
@@ -57,7 +61,8 @@
         "font_size": 13,
         "align": "center",
         "direction": "rtl",
-        "min_font_size": 8
+        "min_font_size": 8,
+        "html_selector": "[data-key=\"type\"]"
       },
       {
         "key": "currency",
@@ -70,7 +75,8 @@
         "font_size": 9,
         "align": "center",
         "direction": "rtl",
-        "min_font_size": 7
+        "min_font_size": 7,
+        "html_selector": "[data-key=\"currency\"]"
       },
       {
         "key": "about",
@@ -119,7 +125,8 @@
             "w": 78.35,
             "h": 2.25
           }
-        ]
+        ],
+        "html_selector": "[data-key=\"about\"]"
       },
       {
         "key": "amount",
@@ -132,7 +139,8 @@
         "font_size": 19,
         "align": "center",
         "direction": "ltr",
-        "min_font_size": 11
+        "min_font_size": 11,
+        "html_selector": "[data-key=\"amount\"]"
       },
       {
         "key": "written_amount",
@@ -174,7 +182,8 @@
             "w": 88.39,
             "h": 2.25
           }
-        ]
+        ],
+        "html_selector": "[data-key=\"written\"]"
       },
       {
         "key": "receiver_name",
@@ -188,11 +197,15 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 9,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[data-key=\"receiver\"]"
       }
     ],
     "pdf": "receipt-voucher.pdf",
-    "source_format": "pdf"
+    "source_format": "html",
+    "template_engine": "html",
+    "html_template": "receipt-voucher.html",
+    "html_root": "#voucherPage"
   },
   "PR": {
     "code": "PR",
@@ -214,7 +227,9 @@
         "h": 2.38,
         "font_size": 18,
         "align": "center",
-        "readonly": true
+        "readonly": true,
+        "html_selector": "[data-save=\"pr_number\"]",
+        "html_readonly": true
       },
       {
         "key": "date",
@@ -225,7 +240,8 @@
         "w": 17.57,
         "h": 2.38,
         "font_size": 17,
-        "align": "center"
+        "align": "center",
+        "html_selector": "[data-save=\"date\"]"
       },
       {
         "key": "reference",
@@ -238,7 +254,8 @@
         "font_size": 12,
         "align": "center",
         "direction": "ltr",
-        "min_font_size": 8
+        "min_font_size": 8,
+        "html_selector": "[data-save=\"reference\"]"
       },
       {
         "key": "requester_name",
@@ -252,7 +269,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 9,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[data-save=\"requester\"]"
       },
       {
         "key": "department",
@@ -266,7 +284,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 9,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[data-save=\"department\"]"
       },
       {
         "key": "pay_to",
@@ -280,7 +299,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 9,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[data-save=\"pay_to\"]"
       },
       {
         "key": "purpose",
@@ -315,6 +335,10 @@
             "w": 71.17,
             "h": 2.25
           }
+        ],
+        "html_selectors": [
+          "[data-save=\"purpose_1\"]",
+          "[data-save=\"purpose_2\"]"
         ]
       },
       {
@@ -326,7 +350,8 @@
         "w": 6.31,
         "h": 2.22,
         "font_size": 22,
-        "align": "center"
+        "align": "center",
+        "html_selector": "[data-save=\"cash\"]"
       },
       {
         "key": "payment_bank",
@@ -337,7 +362,8 @@
         "w": 6.08,
         "h": 2.22,
         "font_size": 22,
-        "align": "center"
+        "align": "center",
+        "html_selector": "[data-save=\"bank\"]"
       },
       {
         "key": "payment_transfer",
@@ -348,7 +374,8 @@
         "w": 6.31,
         "h": 2.22,
         "font_size": 22,
-        "align": "center"
+        "align": "center",
+        "html_selector": "[data-save=\"transfer\"]"
       },
       {
         "key": "amount",
@@ -361,7 +388,8 @@
         "font_size": 17,
         "align": "center",
         "direction": "ltr",
-        "min_font_size": 10
+        "min_font_size": 10,
+        "html_selector": "[data-save=\"amount\"]"
       },
       {
         "key": "currency",
@@ -374,7 +402,8 @@
         "font_size": 12,
         "align": "center",
         "direction": "ltr",
-        "min_font_size": 7
+        "min_font_size": 7,
+        "html_selector": "[data-save=\"currency\"]"
       },
       {
         "key": "written_amount",
@@ -409,6 +438,10 @@
             "w": 55.63,
             "h": 2.25
           }
+        ],
+        "html_selectors": [
+          "[data-save=\"written_amount_1\"]",
+          "[data-save=\"written_amount_2\"]"
         ]
       },
       {
@@ -423,7 +456,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 8,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[data-save=\"prepared_signature\"]"
       },
       {
         "key": "verified_by",
@@ -437,7 +471,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 8,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[data-save=\"manager_signature\"]"
       },
       {
         "key": "approval",
@@ -451,11 +486,15 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 8,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[data-save=\"approval_signature\"]"
       }
     ],
     "pdf": "payment-request.pdf",
-    "source_format": "pdf"
+    "source_format": "html",
+    "template_engine": "html",
+    "html_template": "payment-request.html",
+    "html_root": "#page"
   },
   "PV": {
     "code": "PV",
@@ -477,7 +516,9 @@
         "h": 2.25,
         "font_size": 18,
         "align": "center",
-        "readonly": true
+        "readonly": true,
+        "html_selector": "#rv",
+        "html_readonly": true
       },
       {
         "key": "date",
@@ -488,7 +529,8 @@
         "w": 12.31,
         "h": 2.34,
         "font_size": 17,
-        "align": "center"
+        "align": "center",
+        "html_selector": "#date"
       },
       {
         "key": "reference",
@@ -501,7 +543,8 @@
         "font_size": 11,
         "align": "center",
         "direction": "ltr",
-        "min_font_size": 7
+        "min_font_size": 7,
+        "html_selector": "#ref"
       },
       {
         "key": "payment_request",
@@ -514,7 +557,8 @@
         "font_size": 9,
         "align": "center",
         "direction": "ltr",
-        "min_font_size": 7
+        "min_font_size": 7,
+        "html_selector": "#request"
       },
       {
         "key": "pay_to",
@@ -528,7 +572,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 9,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "#payto"
       },
       {
         "key": "purpose",
@@ -570,7 +615,8 @@
             "w": 77.78,
             "h": 2.25
           }
-        ]
+        ],
+        "html_selector": "#purpose"
       },
       {
         "key": "amount",
@@ -583,7 +629,8 @@
         "font_size": 17,
         "align": "center",
         "direction": "ltr",
-        "min_font_size": 10
+        "min_font_size": 10,
+        "html_selector": "#amount"
       },
       {
         "key": "currency",
@@ -596,7 +643,8 @@
         "font_size": 9,
         "align": "center",
         "direction": "ltr",
-        "min_font_size": 7
+        "min_font_size": 7,
+        "html_selector": "#currency"
       },
       {
         "key": "written_amount",
@@ -638,7 +686,8 @@
             "w": 89.49,
             "h": 2.25
           }
-        ]
+        ],
+        "html_selector": "#written"
       },
       {
         "key": "receiver_name",
@@ -652,7 +701,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 8,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "#receiver"
       },
       {
         "key": "accountant",
@@ -666,7 +716,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 8,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "#accountant"
       },
       {
         "key": "approval",
@@ -680,11 +731,15 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 8,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "#approval"
       }
     ],
     "pdf": "payment-voucher.pdf",
-    "source_format": "pdf"
+    "source_format": "html",
+    "template_engine": "html",
+    "html_template": "payment-voucher.html",
+    "html_root": "#voucherPage"
   },
   "VM": {
     "code": "VM",
@@ -694,7 +749,7 @@
     "image": "vehicle-maintenance.png",
     "pdf": "vehicle-maintenance.pdf",
     "docx": "",
-    "source_format": "pdf",
+    "source_format": "html",
     "list_primary_field": "vehicle",
     "amount_field": "maintenance_total",
     "fields": [
@@ -709,7 +764,8 @@
         "font_size": 15,
         "align": "right",
         "direction": "rtl",
-        "min_font_size": 9
+        "min_font_size": 9,
+        "html_selector": "[aria-label=\"السيارة\"]"
       },
       {
         "key": "vehicle_number",
@@ -722,7 +778,8 @@
         "font_size": 15,
         "align": "right",
         "direction": "rtl",
-        "min_font_size": 9
+        "min_font_size": 9,
+        "html_selector": "[aria-label=\"رقم السيارة\"]"
       },
       {
         "key": "maintenance_date",
@@ -735,7 +792,8 @@
         "font_size": 14,
         "align": "right",
         "direction": "ltr",
-        "min_font_size": 9
+        "min_font_size": 9,
+        "html_selector": "[aria-label=\"تاريخ الصيانة\"]"
       },
       {
         "key": "received_amount",
@@ -748,7 +806,8 @@
         "font_size": 14,
         "align": "right",
         "direction": "rtl",
-        "min_font_size": 9
+        "min_font_size": 9,
+        "html_selector": "[aria-label=\"المبلغ المستلم لغرض الصيانة\"]"
       },
       {
         "key": "fault_1",
@@ -762,7 +821,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 1\"]"
       },
       {
         "key": "amount_1",
@@ -776,7 +836,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 1\"]"
       },
       {
         "key": "shop_1",
@@ -790,7 +851,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 1\"]"
       },
       {
         "key": "notes_1",
@@ -804,7 +866,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 1\"]"
       },
       {
         "key": "fault_2",
@@ -818,7 +881,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 2\"]"
       },
       {
         "key": "amount_2",
@@ -832,7 +896,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 2\"]"
       },
       {
         "key": "shop_2",
@@ -846,7 +911,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 2\"]"
       },
       {
         "key": "notes_2",
@@ -860,7 +926,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 2\"]"
       },
       {
         "key": "fault_3",
@@ -874,7 +941,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 3\"]"
       },
       {
         "key": "amount_3",
@@ -888,7 +956,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 3\"]"
       },
       {
         "key": "shop_3",
@@ -902,7 +971,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 3\"]"
       },
       {
         "key": "notes_3",
@@ -916,7 +986,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 3\"]"
       },
       {
         "key": "fault_4",
@@ -930,7 +1001,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 4\"]"
       },
       {
         "key": "amount_4",
@@ -944,7 +1016,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 4\"]"
       },
       {
         "key": "shop_4",
@@ -958,7 +1031,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 4\"]"
       },
       {
         "key": "notes_4",
@@ -972,7 +1046,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 4\"]"
       },
       {
         "key": "fault_5",
@@ -986,7 +1061,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 5\"]"
       },
       {
         "key": "amount_5",
@@ -1000,7 +1076,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 5\"]"
       },
       {
         "key": "shop_5",
@@ -1014,7 +1091,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 5\"]"
       },
       {
         "key": "notes_5",
@@ -1028,7 +1106,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 5\"]"
       },
       {
         "key": "fault_6",
@@ -1042,7 +1121,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 6\"]"
       },
       {
         "key": "amount_6",
@@ -1056,7 +1136,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 6\"]"
       },
       {
         "key": "shop_6",
@@ -1070,7 +1151,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 6\"]"
       },
       {
         "key": "notes_6",
@@ -1084,7 +1166,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 6\"]"
       },
       {
         "key": "fault_7",
@@ -1098,7 +1181,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 7\"]"
       },
       {
         "key": "amount_7",
@@ -1112,7 +1196,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 7\"]"
       },
       {
         "key": "shop_7",
@@ -1126,7 +1211,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 7\"]"
       },
       {
         "key": "notes_7",
@@ -1140,7 +1226,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 7\"]"
       },
       {
         "key": "fault_8",
@@ -1154,7 +1241,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 8\"]"
       },
       {
         "key": "amount_8",
@@ -1168,7 +1256,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 8\"]"
       },
       {
         "key": "shop_8",
@@ -1182,7 +1271,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 8\"]"
       },
       {
         "key": "notes_8",
@@ -1196,7 +1286,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 8\"]"
       },
       {
         "key": "fault_9",
@@ -1210,7 +1301,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 9\"]"
       },
       {
         "key": "amount_9",
@@ -1224,7 +1316,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 9\"]"
       },
       {
         "key": "shop_9",
@@ -1238,7 +1331,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 9\"]"
       },
       {
         "key": "notes_9",
@@ -1252,7 +1346,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 9\"]"
       },
       {
         "key": "fault_10",
@@ -1266,7 +1361,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 10\"]"
       },
       {
         "key": "amount_10",
@@ -1280,7 +1376,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 10\"]"
       },
       {
         "key": "shop_10",
@@ -1294,7 +1391,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 10\"]"
       },
       {
         "key": "notes_10",
@@ -1308,7 +1406,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 10\"]"
       },
       {
         "key": "fault_11",
@@ -1322,7 +1421,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 11\"]"
       },
       {
         "key": "amount_11",
@@ -1336,7 +1436,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 11\"]"
       },
       {
         "key": "shop_11",
@@ -1350,7 +1451,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 11\"]"
       },
       {
         "key": "notes_11",
@@ -1364,7 +1466,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 11\"]"
       },
       {
         "key": "fault_12",
@@ -1378,7 +1481,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"نوع العطل 12\"]"
       },
       {
         "key": "amount_12",
@@ -1392,7 +1496,8 @@
         "align": "center",
         "direction": "ltr",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"المبلغ 12\"]"
       },
       {
         "key": "shop_12",
@@ -1406,7 +1511,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة 12\"]"
       },
       {
         "key": "notes_12",
@@ -1420,7 +1526,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات 12\"]"
       },
       {
         "key": "maintenance_total",
@@ -1433,7 +1540,8 @@
         "font_size": 14,
         "align": "center",
         "direction": "ltr",
-        "min_font_size": 8
+        "min_font_size": 8,
+        "html_selector": "[aria-label=\"مبلغ المجموع\"]"
       },
       {
         "key": "returned_amount",
@@ -1446,7 +1554,8 @@
         "font_size": 14,
         "align": "center",
         "direction": "ltr",
-        "min_font_size": 8
+        "min_font_size": 8,
+        "html_selector": "[aria-label=\"المبلغ المسترجع\"]"
       },
       {
         "key": "driver",
@@ -1459,7 +1568,8 @@
         "font_size": 13,
         "align": "right",
         "direction": "rtl",
-        "min_font_size": 8
+        "min_font_size": 8,
+        "html_selector": "[aria-label=\"السائق\"]"
       },
       {
         "key": "executive_manager",
@@ -1472,7 +1582,8 @@
         "font_size": 13,
         "align": "right",
         "direction": "rtl",
-        "min_font_size": 8
+        "min_font_size": 8,
+        "html_selector": "[aria-label=\"المدير التنفيذي\"]"
       },
       {
         "key": "line_manager",
@@ -1485,7 +1596,8 @@
         "font_size": 13,
         "align": "right",
         "direction": "rtl",
-        "min_font_size": 8
+        "min_font_size": 8,
+        "html_selector": "[aria-label=\"المدير المباشر\"]"
       },
       {
         "key": "accounts_manager",
@@ -1498,7 +1610,8 @@
         "font_size": 13,
         "align": "right",
         "direction": "rtl",
-        "min_font_size": 8
+        "min_font_size": 8,
+        "html_selector": "[aria-label=\"مدير الحسابات\"]"
       },
       {
         "key": "maintenance_total_notes",
@@ -1512,7 +1625,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات المجموع\"]"
       },
       {
         "key": "maintenance_total_shop",
@@ -1526,7 +1640,8 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة للمجموع\"]"
       },
       {
         "key": "returned_amount_notes",
@@ -1540,7 +1655,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"ملاحظات المبلغ المسترجع\"]"
       },
       {
         "key": "returned_amount_shop",
@@ -1554,9 +1670,121 @@
         "align": "center",
         "direction": "rtl",
         "min_font_size": 7,
-        "font_weight": "normal"
+        "font_weight": "normal",
+        "html_selector": "[aria-label=\"محل الصيانة للمبلغ المسترجع\"]"
       }
     ],
-    "list_date_field": "maintenance_date"
+    "list_date_field": "maintenance_date",
+    "template_engine": "html",
+    "html_template": "vehicle-maintenance.html",
+    "html_root": ".sheet"
+  },
+  "TR": {
+    "code": "TR",
+    "name_ar": "تحويل",
+    "name_en": "Request Transfer",
+    "prefix": "TR",
+    "image": "request-transfer.png",
+    "pdf": "request-transfer.pdf",
+    "docx": "request-transfer.docx",
+    "source_format": "html",
+    "list_primary_field": "pay_to",
+    "amount_field": "amount",
+    "fields": [
+      {
+        "key": "date",
+        "label_ar": "التاريخ",
+        "type": "date",
+        "direction": "ltr",
+        "html_selector": "[data-field=\"date\"]"
+      },
+      {
+        "key": "department",
+        "label_ar": "القسم",
+        "type": "text",
+        "direction": "rtl",
+        "html_selector": "[data-field=\"department\"]"
+      },
+      {
+        "key": "pay_to",
+        "label_ar": "الدفع إلى",
+        "type": "text",
+        "direction": "rtl",
+        "html_selector": "[data-field=\"payto\"]"
+      },
+      {
+        "key": "purpose",
+        "label_ar": "الغرض",
+        "type": "textarea",
+        "direction": "rtl",
+        "line_count": 2,
+        "enter_moves_next": true,
+        "html_selectors": [
+          "[data-field=\"purpose1\"]",
+          "[data-field=\"purpose2\"]"
+        ]
+      },
+      {
+        "key": "transfer_entity",
+        "label_ar": "جهة التحويل",
+        "type": "text",
+        "direction": "rtl",
+        "html_selector": "[data-field=\"transfer\"]"
+      },
+      {
+        "key": "amount",
+        "label_ar": "المبلغ",
+        "type": "text",
+        "direction": "ltr",
+        "html_selector": "[data-field=\"amount\"]"
+      },
+      {
+        "key": "currency",
+        "label_ar": "العملة",
+        "type": "text",
+        "direction": "ltr",
+        "html_selector": "[data-field=\"currency\"]"
+      },
+      {
+        "key": "written_amount",
+        "label_ar": "المبلغ كتابة",
+        "type": "textarea",
+        "direction": "rtl",
+        "line_count": 2,
+        "enter_moves_next": true,
+        "html_selectors": [
+          "[data-field=\"written1\"]",
+          "[data-field=\"written2\"]"
+        ]
+      },
+      {
+        "key": "prepared_by",
+        "label_ar": "اسم مقدم الصرف",
+        "type": "text",
+        "direction": "rtl",
+        "html_selector": "[data-field=\"prepared\"]"
+      },
+      {
+        "key": "accounts",
+        "label_ar": "الحسابات",
+        "type": "text",
+        "direction": "rtl",
+        "html_selector": "[data-field=\"accounts\"]"
+      },
+      {
+        "key": "approval",
+        "label_ar": "الموافقة",
+        "type": "text",
+        "direction": "rtl",
+        "html_selector": "[data-field=\"approval\"]"
+      }
+    ],
+    "template_engine": "html",
+    "html_template": "request-transfer.html",
+    "html_root": "#sheet",
+    "html_wrapper": "#wrap",
+    "html_hide_selectors": [
+      ".toolbar"
+    ]
   }
 }

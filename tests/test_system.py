@@ -44,7 +44,7 @@ def test_full_document_lifecycle():
 
         types = client.get("/api/document-types", headers=headers)
         assert types.status_code == 200
-        assert {item["code"] for item in types.json()} == {"RV", "PR", "PV", "VM"}
+        assert {item["code"] for item in types.json()} == {"RV", "PR", "PV", "VM", "TR"}
 
         vehicle = client.post(
             "/api/documents",
@@ -152,9 +152,62 @@ def test_users_and_permissions():
         assert new_user.status_code == 201
         viewer_token = client.post("/api/auth/login", json={"username": "viewer", "password": "ViewerPass123!"}).json()["token"]
         viewer_headers = auth_headers(viewer_token)
+        me = client.get("/api/auth/me", headers=viewer_headers)
+        assert me.status_code == 200
+        assert "documents.TR" in me.json()["page_permissions"]
         assert client.get("/api/documents", headers=viewer_headers).status_code == 200
         assert client.post("/api/documents", headers=viewer_headers, json={"type_code": "PR", "fields": {}}).status_code == 403
         assert client.get("/api/users", headers=viewer_headers).status_code == 403
+        assert client.get("/api/permissions", headers=viewer_headers).status_code == 403
+
+        editor = client.post(
+            "/api/users",
+            headers=admin_headers,
+            json={"full_name": "Transfer Editor", "username": "transfer.editor", "password": "EditorPass123!", "role": "editor"},
+        ).json()
+        permissions = client.get("/api/permissions", headers=admin_headers)
+        assert permissions.status_code == 200
+        assert {page["key"] for page in permissions.json()["pages"]} == {
+            "dashboard", "documents.RV", "documents.PR", "documents.PV", "documents.VM", "documents.TR"
+        }
+        changed = client.put(
+            f"/api/permissions/users/{editor['id']}",
+            headers=admin_headers,
+            json={"page_keys": ["dashboard", "documents.TR"]},
+        )
+        assert changed.status_code == 200
+
+        editor_token = client.post("/api/auth/login", json={"username": "transfer.editor", "password": "EditorPass123!"}).json()["token"]
+        editor_headers = auth_headers(editor_token)
+        editor_types = client.get("/api/document-types", headers=editor_headers)
+        assert editor_types.status_code == 200
+        assert [item["code"] for item in editor_types.json()] == ["TR"]
+        assert client.get("/api/documents?type_code=PR", headers=editor_headers).status_code == 403
+        transfer = client.post(
+            "/api/documents",
+            headers=editor_headers,
+            json={"type_code": "TR", "status": "draft", "fields": {"pay_to": "شركة اختبار", "amount": "500"}},
+        )
+        assert transfer.status_code == 201, transfer.text
+        assert transfer.json()["document_number"] == "TR-000001"
+        assert transfer.json()["fields"]["pay_to"] == "شركة اختبار"
+        assert client.post("/api/documents", headers=editor_headers, json={"type_code": "PV", "fields": {}}).status_code == 403
+
+        removed_dashboard = client.put(
+            f"/api/permissions/users/{editor['id']}",
+            headers=admin_headers,
+            json={"page_keys": ["documents.TR"]},
+        )
+        assert removed_dashboard.status_code == 200
+        assert client.get("/api/dashboard", headers=editor_headers).status_code == 403
+        assert client.get(f"/api/documents/{transfer.json()['id']}", headers=editor_headers).status_code == 200
+
+        admin_id = client.get("/api/users", headers=admin_headers).json()[0]["id"]
+        if admin_id == editor["id"]:
+            admin_id = next(item["id"] for item in client.get("/api/users", headers=admin_headers).json() if item["role"] == "admin")
+        assert client.put(
+            f"/api/permissions/users/{admin_id}", headers=admin_headers, json={"page_keys": []}
+        ).status_code == 422
 
 
 def test_system_status_and_backup():
@@ -170,10 +223,10 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.8'
+        assert status_data['version'] == '3.3.9'
         assert status_data['database']['ok'] is True
         assert status_data['counts']['documents'] == 1
-        assert len(status_data['templates']) == 14
+        assert len(status_data['templates']) == 15
         assert all(item['ok'] is True for item in status_data['templates'])
 
         backup = client.post('/api/system/backup', headers=headers)
@@ -189,8 +242,9 @@ def test_system_status_and_backup():
             assert 'templates/originals/receipt-voucher-original.docx' in names
             assert 'app/static/templates/receipt-voucher.png' in names
             assert 'app/static/form-templates/receipt-voucher.html' in names
+            assert 'app/static/form-templates/request-transfer.html' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.8'
+            assert manifest['version'] == '3.3.9'
             assert manifest['files']
 
 
@@ -375,6 +429,23 @@ def test_arabic_rtl_rendering_engine_and_pdf_output():
     assert output.exists() and output.stat().st_size > 10_000
     reader = PdfReader(str(output))
     assert len(reader.pages) == 1
+
+    transfer_output = TEST_DATA / 'arabic-transfer.pdf'
+    render_document_pdf(config['TR'], {
+        'date': '2026-08-10',
+        'department': 'قسم الحسابات',
+        'pay_to': 'شركة التكامل العربي',
+        'purpose': 'تحويل دفعة مستحقة\nحسب الاتفاق',
+        'transfer_entity': 'مصرف الاختبار',
+        'amount': '250000',
+        'currency': 'IQD',
+        'written_amount': 'مائتان وخمسون ألف دينار عراقي\nفقط لا غير',
+        'prepared_by': 'علي حسن',
+        'accounts': 'محمد كريم',
+        'approval': 'موافق',
+    }, transfer_output)
+    assert transfer_output.exists() and transfer_output.stat().st_size > 10_000
+    assert len(PdfReader(str(transfer_output)).pages) == 1
 
 
 def test_exact_html_templates_are_immutable_and_all_field_selectors_exist():

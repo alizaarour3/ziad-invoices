@@ -29,6 +29,7 @@ const ICONS = {
   print: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>',
   trash: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 10v7M14 10v7"/></svg>',
   users: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 3.5a4 4 0 0 1 0 7.5M17 14a6 6 0 0 1 5 6"/></svg>',
+  permissions: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4.5 6v5.5c0 4.5 3.1 7.7 7.5 9.5 4.4-1.8 7.5-5 7.5-9.5V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>',
   audit: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>',
   logout: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 17l5-5-5-5M15 12H3M15 4h5v16h-5"/></svg>',
   menu: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
@@ -64,6 +65,12 @@ function formatBytes(bytes) {
   return `${(number / (1024 ** 2)).toFixed(1)} MB`;
 }
 function roleLabel(role) { return ({admin:'مدير النظام', editor:'محرر', viewer:'مشاهد'})[role] || role; }
+function canViewPage(pageKey) { return state.user?.role === 'admin' || Boolean(state.user?.page_permissions?.includes(pageKey)); }
+function firstAllowedRoute() {
+  if (canViewPage('dashboard')) return '/dashboard';
+  const firstType = state.types[0];
+  return firstType ? `/documents/${firstType.code}` : '/no-access';
+}
 function statusBadge(status) { return `<span class="badge badge-${status}">${status === 'draft' ? 'مسودة' : 'محفوظ'}</span>`; }
 function initials(name) { return String(name || 'U').trim().split(/\s+/).slice(0,2).map(x => x[0]).join('').toUpperCase(); }
 
@@ -87,6 +94,8 @@ async function api(path, options = {}) {
   if (response.status === 401 && !path.includes('/auth/login')) {
     state.token = '';
     state.user = null;
+    state.types = [];
+    state.counts = {};
     localStorage.removeItem('ziad_token');
     renderLogin();
     throw new Error('انتهت الجلسة. سجّل الدخول من جديد.');
@@ -126,7 +135,7 @@ function authLayout(title, description, formHtml) {
       <section class="auth-visual">
         <div class="auth-copy">
           <h1>النماذج الأصلية، داخل نظام احترافي.</h1>
-          <p>اكتب مباشرة على مستندات القبض وطلبات الصرف ومستندات الدفع، ثم احفظها وعدّلها واطبعها مع مرفقاتها دون تغيير أي تفصيل في القالب الأصلي.</p>
+          <p>اكتب مباشرة على مستندات القبض والصرف والدفع وكشوف الصيانة وطلبات التحويل، ثم احفظها وعدّلها واطبعها مع مرفقاتها دون تغيير أي تفصيل في القالب الأصلي.</p>
         </div>
       </section>
     </main>`;
@@ -183,8 +192,11 @@ function renderLogin() {
       const data = await api('/api/auth/login', {method:'POST', body:{username:form.get('username'), password:form.get('password')}});
       state.token = data.token;
       state.user = data.user;
+      state.types = [];
+      state.counts = {};
       localStorage.setItem('ziad_token', data.token);
-      navigate('/dashboard');
+      await ensureTypes();
+      navigate(firstAllowedRoute());
     } catch (err) {
       error.textContent = err.message;
       button.disabled = false; button.textContent = 'تسجيل الدخول';
@@ -227,6 +239,7 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
   const adminLinks = user.role === 'admin' ? `
     <div class="nav-label">الإدارة</div>
     <a class="nav-item ${activePath('/users')}" href="#/users" title="المستخدمون">${icon('users')}<span>المستخدمون</span></a>
+    <a class="nav-item ${activePath('/permissions')}" href="#/permissions" title="صلاحيات الصفحات">${icon('permissions')}<span>صلاحيات</span></a>
     <a class="nav-item ${activePath('/reports')}" href="#/reports" title="التقارير والتصدير">${icon('download')}<span>التقارير والتصدير</span></a>
     <a class="nav-item ${activePath('/audit')}" href="#/audit" title="سجل العمليات">${icon('audit')}<span>سجل العمليات</span></a>
     <a class="nav-item ${activePath('/settings')}" href="#/settings" title="الإعدادات والنسخ">${icon('settings')}<span>الإعدادات والنسخ</span></a>` : '';
@@ -238,11 +251,11 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
       <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-head">
-          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.8</span></div></div>
+          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.9</span></div></div>
           <button id="sidebar-close" class="btn btn-icon btn-link sidebar-close" aria-label="إغلاق القائمة">${icon('close')}</button>
         </div>
         <nav class="sidebar-nav">
-          <a class="nav-item ${activePath('/dashboard')}" href="#/dashboard" title="الداشبورد">${icon('dashboard')}<span>الداشبورد</span></a>
+          ${canViewPage('dashboard') ? `<a class="nav-item ${activePath('/dashboard')}" href="#/dashboard" title="الداشبورد">${icon('dashboard')}<span>الداشبورد</span></a>` : ''}
           <div class="nav-label">النماذج</div>
           ${typeLinks}${adminLinks}
         </nav>
@@ -274,7 +287,7 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
 
 async function doLogout() {
   try { await api('/api/auth/logout', {method:'POST'}); } catch (_) {}
-  state.token = ''; state.user = null; localStorage.removeItem('ziad_token');
+  state.token = ''; state.user = null; state.types = []; state.counts = {}; localStorage.removeItem('ziad_token');
   renderLogin();
 }
 
@@ -317,7 +330,7 @@ async function renderDashboard() {
   const activityBars = weekly.map(item => `<div class="activity-column" title="${escapeHtml(item.date)}: ${item.count}"><div class="activity-value">${item.count}</div><div class="activity-track"><span style="height:${Math.max(5, Math.round(item.count / maxActivity * 100))}%"></span></div><small>${escapeHtml(item.label)}</small></div>`).join('');
   const typeCards = data.types.map(type => `<a class="type-overview-card" href="#/documents/${type.code}"><div class="type-overview-icon">${icon('file')}</div><div class="type-overview-copy"><strong>${escapeHtml(type.name_ar)}</strong><span>${type.saved_count || 0} محفوظ · ${type.draft_count || 0} مسودة</span></div><div class="type-overview-count">${type.count}</div>${icon('chevron')}</a>`).join('');
   const recentRows = data.recent.length ? data.recent.map(doc => `<tr><td class="mono"><strong>${escapeHtml(doc.document_number)}</strong></td><td>${escapeHtml(doc.type.name_ar)}</td><td>${escapeHtml(doc.fields[doc.type.config.list_primary_field] || '-')}</td><td>${statusBadge(doc.status)}</td><td>${formatDate(doc.updated_at, true)}</td><td>${documentActionButtons(doc)}</td></tr>`).join('') : `<tr><td colspan="6"><div class="empty">لا توجد مستندات حتى الآن.</div></td></tr>`;
-  const createAction = state.user.role !== 'viewer' ? `<button id="dashboard-create" class="btn btn-primary">${icon('plus')} إنشاء مستند</button>` : '';
+  const createAction = state.user.role !== 'viewer' && state.types.length ? `<button id="dashboard-create" class="btn btn-primary">${icon('plus')} إنشاء مستند</button>` : '';
   shell('الداشبورد', `
     <div class="page-header dashboard-header"><div><span class="eyebrow">مساحة العمل</span><h1>مرحباً، ${escapeHtml(state.user.full_name)}</h1><p>نظرة واضحة على المستندات وحالة العمل اليوم.</p></div><div class="page-actions">${createAction}</div></div>
     <div class="cards dashboard-cards">
@@ -337,7 +350,7 @@ async function renderDashboard() {
 
 async function renderDocumentList(code) {
   const type = state.types.find(item => item.code === code);
-  if (!type) return navigate('/dashboard');
+  if (!type) return navigate(firstAllowedRoute());
   pageLoading(type.name_ar);
   const documents = await api(`/api/documents?type_code=${encodeURIComponent(code)}&limit=500`);
   state.counts[code] = documents.length;
@@ -598,6 +611,21 @@ function scaleHtmlTemplateFrame(frame, config) {
   const html = frameDoc.documentElement;
   const body = frameDoc.body;
 
+  const hiddenSelectors = Array.isArray(config.html_hide_selectors) ? config.html_hide_selectors : [];
+  hiddenSelectors.forEach(selector => {
+    frameDoc.querySelectorAll(selector).forEach(element => element.style.setProperty('display', 'none', 'important'));
+  });
+  if (config.html_wrapper) {
+    const wrapper = frameDoc.querySelector(config.html_wrapper);
+    if (wrapper) {
+      wrapper.style.setProperty('transform', 'none', 'important');
+      wrapper.style.setProperty('transform-origin', 'top left', 'important');
+      wrapper.style.setProperty('margin', '0', 'important');
+      wrapper.style.setProperty('width', '210mm', 'important');
+      wrapper.style.setProperty('height', '297mm', 'important');
+    }
+  }
+
   // The uploaded templates are authored with different RTL/LTR page shells.
   // In a narrow iframe, RTL block layout can place a fixed-width A4 root at a
   // negative X position, which made PV/VM look like a blank white page. Keep
@@ -665,6 +693,21 @@ function configureHtmlTemplateFrame(frame, doc, viewOnly) {
       [data-ziad-template-root="1"]{transform:scale(var(--ziad-template-scale,1))!important;transform-origin:top left!important;margin:0!important;}
     `;
     frameDoc.head.appendChild(helperStyle);
+  }
+
+  const hiddenSelectors = Array.isArray(doc.type.config.html_hide_selectors) ? doc.type.config.html_hide_selectors : [];
+  hiddenSelectors.forEach(selector => {
+    frameDoc.querySelectorAll(selector).forEach(element => element.style.setProperty('display', 'none', 'important'));
+  });
+  if (doc.type.config.html_wrapper) {
+    const wrapper = frameDoc.querySelector(doc.type.config.html_wrapper);
+    if (wrapper) {
+      wrapper.style.setProperty('transform', 'none', 'important');
+      wrapper.style.setProperty('transform-origin', 'top left', 'important');
+      wrapper.style.setProperty('margin', '0', 'important');
+      wrapper.style.setProperty('width', '210mm', 'important');
+      wrapper.style.setProperty('height', '297mm', 'important');
+    }
   }
 
   doc.type.config.fields.forEach(field => {
@@ -1004,15 +1047,74 @@ function openEditUserModal(user) {
   });
 }
 
+async function renderPermissions() {
+  pageLoading('صلاحيات');
+  const data = await api('/api/permissions');
+  const pages = data.pages || [];
+  const users = data.users || [];
+  const renderRows = items => {
+    const body = document.getElementById('permission-user-rows');
+    body.innerHTML = items.map(user => {
+      const allowed = user.role === 'admin' ? pages.length : (user.page_permissions || []).length;
+      const access = user.role === 'admin'
+        ? '<span class="badge badge-saved">كامل تلقائياً</span>'
+        : `<span class="permission-count"><strong>${allowed}</strong> / ${pages.length}</span>`;
+      return `<tr><td><strong>${escapeHtml(user.full_name)}</strong><span class="table-subtext mono">${escapeHtml(user.username)}</span></td><td><span class="badge badge-${user.role}">${escapeHtml(roleLabel(user.role))}</span></td><td>${user.is_active ? '<span class="badge badge-saved">فعال</span>' : '<span class="badge badge-draft">موقوف</span>'}</td><td>${access}</td><td><div class="row-actions"><button type="button" class="btn btn-secondary row-action" data-user-permissions="${user.id}">${icon('permissions')}<span>${user.role === 'admin' ? 'عرض' : 'إدارة'}</span></button></div></td></tr>`;
+    }).join('') || `<tr><td colspan="5"><div class="empty">لا يوجد مستخدمون.</div></td></tr>`;
+    body.querySelectorAll('[data-user-permissions]').forEach(button => {
+      const user = users.find(item => item.id === Number(button.dataset.userPermissions));
+      button.addEventListener('click', () => openPermissionsModal(user, pages));
+    });
+  };
+  shell('صلاحيات', `
+    <div class="page-header"><div><span class="eyebrow">إدارة النظام</span><h1>صلاحيات الصفحات</h1><p>حدد الصفحات التي يستطيع كل مستخدم رؤيتها. نوع الحساب يحدد ما إذا كان يستطيع التعديل أو المشاهدة فقط.</p></div></div>
+    <div class="permission-info-grid"><div class="lock-note">${icon('permissions')} مدير النظام يرى جميع الصفحات دائماً ولا يمكن حجب صفحات الإدارة عنه.</div><div class="lock-note">${icon('eye')} إلغاء صفحة من المستخدم يخفيها من القائمة ويمنع الوصول إلى مستنداتها من واجهة النظام وواجهات API.</div></div>
+    <div class="panel"><div class="panel-head document-toolbar"><div class="search-box">${icon('search')}<input id="permission-search" class="control" placeholder="بحث باسم المستخدم..."></div></div><div class="table-wrap"><table><thead><tr><th>المستخدم</th><th>نوع الحساب</th><th>الحالة</th><th>الصفحات المتاحة</th><th>الإجراءات</th></tr></thead><tbody id="permission-user-rows"></tbody></table></div></div>`);
+  document.getElementById('permission-search').addEventListener('input', event => {
+    const term = event.target.value.trim().toLowerCase();
+    renderRows(users.filter(user => `${user.full_name} ${user.username} ${roleLabel(user.role)}`.toLowerCase().includes(term)));
+  });
+  renderRows(users);
+}
+
+function openPermissionsModal(user, pages) {
+  if (!user) return;
+  const admin = user.role === 'admin';
+  const allowed = new Set(user.page_permissions || []);
+  const options = pages.map(page => `<label class="permission-page-option ${admin || allowed.has(page.key) ? 'is-enabled' : ''}"><input type="checkbox" value="${escapeHtml(page.key)}" ${admin || allowed.has(page.key) ? 'checked' : ''} ${admin ? 'disabled' : ''}><span class="permission-page-icon">${page.key === 'dashboard' ? icon('dashboard') : icon('file')}</span><span><strong>${escapeHtml(page.name_ar)}</strong><small>${escapeHtml(page.category)}</small></span></label>`).join('');
+  const footer = admin
+    ? ['<button id="permissions-close" class="btn btn-primary">إغلاق</button>']
+    : ['<button id="permissions-cancel" class="btn btn-secondary">إلغاء</button>', `<button id="permissions-save" class="btn btn-primary">${icon('save')} حفظ الصلاحيات</button>`];
+  showModal(`صلاحيات ${user.full_name}`, `<div class="permissions-modal"><div class="lock-note">${admin ? 'هذا الحساب مدير نظام، لذلك يمتلك وصولاً كاملاً تلقائياً.' : `حدد الصفحات التي تريد أن تظهر للمستخدم «${escapeHtml(user.full_name)}».`}</div><div class="permission-page-grid">${options}</div></div>`, footer, 'modal-lg');
+  modalRoot.querySelectorAll('.permission-page-option input').forEach(input => input.addEventListener('change', () => input.closest('.permission-page-option')?.classList.toggle('is-enabled', input.checked)));
+  document.getElementById('permissions-close')?.addEventListener('click', closeModal);
+  document.getElementById('permissions-cancel')?.addEventListener('click', closeModal);
+  document.getElementById('permissions-save')?.addEventListener('click', async event => {
+    const button = event.currentTarget;
+    const original = button.innerHTML;
+    const pageKeys = [...modalRoot.querySelectorAll('.permission-page-option input:checked')].map(input => input.value);
+    button.disabled = true; button.innerHTML = '<span class="loader"></span> جارٍ الحفظ';
+    try {
+      await api(`/api/permissions/users/${user.id}`, {method:'PUT', body:{page_keys:pageKeys}});
+      closeModal();
+      toast('تم تحديث صلاحيات الصفحات', 'success');
+      await renderPermissions();
+    } catch (err) {
+      toast(err.message, 'error');
+      button.disabled = false; button.innerHTML = original;
+    }
+  });
+}
+
 async function renderAudit() {
   pageLoading('سجل العمليات');
   const logs = await api('/api/audit?limit=500');
   const actionNames = {
     'auth.login':'تسجيل دخول','auth.logout':'تسجيل خروج','auth.login_failed':'محاولة دخول فاشلة','auth.password_changed':'تغيير كلمة المرور','system.setup':'إعداد النظام',
     'document.create':'إنشاء مستند','document.update':'تعديل مستند','document.delete_permanent':'حذف مستند نهائياً','document.print_export':'طباعة/تصدير',
-    'attachment.upload':'رفع مرفق','attachment.delete':'حذف مرفق','attachment.update':'تعديل مرفق','user.create':'إنشاء مستخدم','user.update':'تعديل مستخدم','system.backup':'إنشاء نسخة احتياطية'
+    'attachment.upload':'رفع مرفق','attachment.delete':'حذف مرفق','attachment.update':'تعديل مرفق','user.create':'إنشاء مستخدم','user.update':'تعديل مستخدم','permission.update':'تعديل صلاحيات الصفحات','system.backup':'إنشاء نسخة احتياطية'
   };
-  const categoryOf = action => action.startsWith('document.') ? 'documents' : action.startsWith('attachment.') ? 'attachments' : action.startsWith('user.') ? 'users' : action.startsWith('auth.') ? 'auth' : 'system';
+  const categoryOf = action => action.startsWith('document.') ? 'documents' : action.startsWith('attachment.') ? 'attachments' : (action.startsWith('user.') || action.startsWith('permission.')) ? 'users' : action.startsWith('auth.') ? 'auth' : 'system';
   const failedLogins = logs.filter(item => item.action === 'auth.login_failed').length;
   const permanentDeletes = logs.filter(item => item.action === 'document.delete_permanent').length;
   const renderRows = items => {
@@ -1096,23 +1198,40 @@ async function renderSettings() {
   });
 }
 
+async function renderNoAccess() {
+  shell('لا توجد صفحات متاحة', `<div class="panel"><div class="empty"><div class="stat-icon">${icon('lock')}</div><h3>لا توجد صفحات مفعلة لهذا الحساب</h3><p>راجع مدير النظام ليمنحك الصلاحية من صفحة «صلاحيات».</p></div></div>`);
+}
+
 async function route() {
   if (!state.user) return;
   try {
     await ensureTypes();
-    const path = location.hash.replace(/^#/, '') || '/dashboard';
-    if (path === '/dashboard') return renderDashboard();
+    const path = location.hash.replace(/^#/, '') || firstAllowedRoute();
+    if (path === '/no-access') return renderNoAccess();
+    if (path === '/dashboard') {
+      if (canViewPage('dashboard')) return renderDashboard();
+      return navigate(firstAllowedRoute());
+    }
     if (path === '/users' && state.user.role === 'admin') return renderUsers();
+    if (path === '/permissions' && state.user.role === 'admin') return renderPermissions();
     if (path === '/reports' && state.user.role === 'admin') return renderReports();
     if (path === '/audit' && state.user.role === 'admin') return renderAudit();
     if (path === '/settings' && state.user.role === 'admin') return renderSettings();
-    let match = path.match(/^\/documents\/(RV|PR|PV|VM)$/);
-    if (match) return renderDocumentList(match[1]);
-    match = path.match(/^\/documents\/new\/(RV|PR|PV|VM)$/);
-    if (match) return createNewDocument(match[1]);
+    let match = path.match(/^\/documents\/([A-Z0-9_-]{2,8})$/i);
+    if (match) {
+      const code = match[1].toUpperCase();
+      if (state.types.some(type => type.code === code)) return renderDocumentList(code);
+      return navigate(firstAllowedRoute());
+    }
+    match = path.match(/^\/documents\/new\/([A-Z0-9_-]{2,8})$/i);
+    if (match) {
+      const code = match[1].toUpperCase();
+      if (state.types.some(type => type.code === code)) return createNewDocument(code);
+      return navigate(firstAllowedRoute());
+    }
     match = path.match(/^\/documents\/(\d+)\/(view|edit)$/);
     if (match) return renderDocumentEditor(Number(match[1]), match[2]);
-    navigate('/dashboard');
+    navigate(firstAllowedRoute());
   } catch (err) {
     toast(err.message || 'حدث خطأ غير متوقع', 'error');
     shell('خطأ', `<div class="panel"><div class="empty"><h3>تعذر تحميل الصفحة</h3><p>${escapeHtml(err.message || '')}</p><button class="btn btn-primary" onclick="location.reload()">إعادة المحاولة</button></div></div>`);
@@ -1127,10 +1246,10 @@ async function bootstrap() {
     try {
       state.user = await api('/api/auth/me');
       await ensureTypes();
-      if (!location.hash) location.hash = '/dashboard';
+      if (!location.hash) location.hash = firstAllowedRoute();
       else route();
     } catch (_) {
-      state.token = ''; localStorage.removeItem('ziad_token'); renderLogin();
+      state.token = ''; state.user = null; state.types = []; state.counts = {}; localStorage.removeItem('ziad_token'); renderLogin();
     }
   } catch (err) {
     root.innerHTML = `<main class="auth-shell" style="grid-template-columns:1fr"><section class="auth-panel"><h2>تعذر تشغيل النظام</h2><p>${escapeHtml(err.message)}</p><button class="btn btn-primary" onclick="location.reload()">إعادة المحاولة</button></section></main>`;

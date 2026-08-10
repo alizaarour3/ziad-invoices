@@ -23,7 +23,7 @@ from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 
 from .auth import CurrentUser, authenticate, get_bearer_token, get_current_user, logout, require
-from .db import DBConnection, Record, audit, connect, init_db, transaction
+from .db import DBConnection, Record, audit, connect, ensure_user_page_permissions, init_db, transaction
 from .schemas import (
     AttachmentNotesRequest,
     ChangePasswordRequest,
@@ -31,6 +31,7 @@ from .schemas import (
     DocumentCreateRequest,
     DocumentUpdateRequest,
     LoginRequest,
+    PagePermissionsUpdateRequest,
     PrintRequest,
     SetupAdminRequest,
     UserCreateRequest,
@@ -91,6 +92,7 @@ async def validation_error_handler(_: Request, exc: RequestValidationError):
         "password": "كلمة المرور",
         "full_name": "الاسم الكامل",
         "role": "الصلاحية",
+        "page_keys": "صلاحيات الصفحات",
     }
     label = field_labels.get(field_key, field_key)
     detail = "البيانات المدخلة غير صحيحة"
@@ -127,6 +129,104 @@ def _user_dict(row: Record) -> dict[str, Any]:
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "last_login_at": row["last_login_at"],
+    }
+
+
+def _managed_pages(conn: DBConnection) -> list[dict[str, str]]:
+    pages: list[dict[str, str]] = [
+        {"key": "dashboard", "name_ar": "الداشبورد", "category": "عام"},
+    ]
+    rows = conn.execute("SELECT code, name_ar FROM document_types WHERE is_active=1 ORDER BY id").fetchall()
+    pages.extend(
+        {"key": f"documents.{row['code']}", "name_ar": row["name_ar"], "category": "النماذج"}
+        for row in rows
+    )
+    return pages
+
+
+def _allowed_page_keys(conn: DBConnection, user_id: int, role: str) -> list[str]:
+    if role == "admin":
+        return [item["key"] for item in _managed_pages(conn)]
+    ensure_user_page_permissions(conn, user_id)
+    rows = conn.execute(
+        "SELECT page_key FROM user_page_permissions WHERE user_id=? AND can_view=1 ORDER BY page_key",
+        (user_id,),
+    ).fetchall()
+    return [str(row["page_key"]) for row in rows]
+
+
+def _can_view_page(conn: DBConnection, user: CurrentUser, page_key: str) -> bool:
+    if user.role == "admin":
+        return True
+    ensure_user_page_permissions(conn, user.id)
+    row = conn.execute(
+        "SELECT can_view FROM user_page_permissions WHERE user_id=? AND page_key=?",
+        (user.id, page_key),
+    ).fetchone()
+    return bool(row and row["can_view"])
+
+
+def _require_page_access(conn: DBConnection, user: CurrentUser, page_key: str) -> None:
+    if not _can_view_page(conn, user, page_key):
+        raise HTTPException(status_code=403, detail="ليس لديك صلاحية لعرض هذه الصفحة")
+
+
+def _document_page_key(type_code: str) -> str:
+    return f"documents.{str(type_code).upper()}"
+
+
+def _allowed_document_codes(conn: DBConnection, user: CurrentUser) -> list[str]:
+    rows = conn.execute("SELECT code FROM document_types WHERE is_active=1 ORDER BY id").fetchall()
+    codes = [str(row["code"]) for row in rows]
+    if user.role == "admin":
+        return codes
+    return [code for code in codes if _can_view_page(conn, user, _document_page_key(code))]
+
+
+def _require_document_code_access(conn: DBConnection, user: CurrentUser, type_code: str) -> None:
+    _require_page_access(conn, user, _document_page_key(type_code))
+
+
+def _document_type_code(conn: DBConnection, document_id: int) -> str:
+    row = conn.execute(
+        "SELECT dt.code FROM documents d JOIN document_types dt ON dt.id=d.document_type_id WHERE d.id=?",
+        (document_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="المستند غير موجود")
+    return str(row["code"])
+
+
+def _require_document_access(conn: DBConnection, user: CurrentUser, document_id: int) -> str:
+    type_code = _document_type_code(conn, document_id)
+    _require_document_code_access(conn, user, type_code)
+    return type_code
+
+
+def _require_attachment_access(conn: DBConnection, user: CurrentUser, attachment_id: int) -> Record:
+    row = conn.execute(
+        """
+        SELECT a.*, dt.code AS type_code
+        FROM attachments a
+        JOIN documents d ON d.id=a.document_id
+        JOIN document_types dt ON dt.id=d.document_type_id
+        WHERE a.id=?
+        """,
+        (attachment_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="المرفق غير موجود")
+    _require_document_code_access(conn, user, str(row["type_code"]))
+    return row
+
+
+def _auth_user_payload(conn: DBConnection, *, user_id: int, full_name: str, username: str, role: str) -> dict[str, Any]:
+    return {
+        "id": user_id,
+        "full_name": full_name,
+        "username": username,
+        "role": role,
+        "page_permissions": _allowed_page_keys(conn, user_id, role),
     }
 
 
@@ -268,7 +368,12 @@ def setup_admin(payload: SetupAdminRequest):
 @app.post("/api/auth/login")
 def login(payload: LoginRequest):
     token, user = authenticate(payload.username, payload.password)
-    return {"token": token, "user": user}
+    conn = connect()
+    try:
+        user["page_permissions"] = _allowed_page_keys(conn, int(user["id"]), str(user["role"]))
+        return {"token": token, "user": user}
+    finally:
+        conn.close()
 
 
 @app.post("/api/auth/change-password")
@@ -306,14 +411,27 @@ def logout_endpoint(
 
 @app.get("/api/auth/me")
 def me(user: Annotated[CurrentUser, Depends(get_current_user)]):
-    return {"id": user.id, "full_name": user.full_name, "username": user.username, "role": user.role}
+    conn = connect()
+    try:
+        return _auth_user_payload(
+            conn, user_id=user.id, full_name=user.full_name, username=user.username, role=user.role
+        )
+    finally:
+        conn.close()
 
 
 @app.get("/api/document-types")
-def document_types(_: Annotated[CurrentUser, Depends(require("documents.read"))]):
+def document_types(user: Annotated[CurrentUser, Depends(require("documents.read"))]):
     conn = connect()
     try:
-        rows = conn.execute("SELECT * FROM document_types WHERE is_active=1 ORDER BY id").fetchall()
+        allowed_codes = _allowed_document_codes(conn, user)
+        if not allowed_codes:
+            return []
+        placeholders = ",".join("?" for _ in allowed_codes)
+        rows = conn.execute(
+            f"SELECT * FROM document_types WHERE is_active=1 AND code IN ({placeholders}) ORDER BY id",
+            allowed_codes,
+        ).fetchall()
         return [
             {
                 "id": row["id"],
@@ -331,52 +449,81 @@ def document_types(_: Annotated[CurrentUser, Depends(require("documents.read"))]
 
 
 @app.get("/api/dashboard")
-def dashboard(_: Annotated[CurrentUser, Depends(require("documents.read"))]):
+def dashboard(user: Annotated[CurrentUser, Depends(require("documents.read"))]):
     conn = connect()
     try:
-        type_rows = conn.execute(
-            """
-            SELECT
-                dt.code,
-                dt.name_ar,
-                COUNT(d.id) AS count,
-                SUM(CASE WHEN d.status='saved' THEN 1 ELSE 0 END) AS saved_count,
-                SUM(CASE WHEN d.status='draft' THEN 1 ELSE 0 END) AS draft_count
-            FROM document_types dt
-            LEFT JOIN documents d ON d.document_type_id=dt.id
-            WHERE dt.is_active=1
-            GROUP BY dt.id, dt.code, dt.name_ar
-            ORDER BY dt.id
-            """
-        ).fetchall()
-        recent = conn.execute(DOCUMENT_SELECT + " ORDER BY d.updated_at DESC LIMIT 8").fetchall()
+        _require_page_access(conn, user, "dashboard")
+        allowed_codes = _allowed_document_codes(conn, user)
         today = datetime.now(timezone.utc).date()
-        totals = conn.execute(
-            """
-            SELECT
-                COUNT(*) AS total_documents,
-                SUM(CASE WHEN status='saved' THEN 1 ELSE 0 END) AS saved_documents,
-                SUM(CASE WHEN status='draft' THEN 1 ELSE 0 END) AS draft_documents,
-                COALESCE(SUM(print_count),0) AS printed_total
-            FROM documents
-            """
-        ).fetchone()
-        today_count = conn.execute(
-            "SELECT COUNT(*) AS count FROM documents WHERE substr(created_at,1,10)=?",
-            (today.isoformat(),),
-        ).fetchone()["count"]
-        attachment_count = conn.execute("SELECT COUNT(*) AS count FROM attachments").fetchone()["count"]
-        activity_rows = conn.execute(
-            """
-            SELECT substr(created_at,1,10) AS day, COUNT(*) AS count
-            FROM documents
-            WHERE substr(created_at,1,10) >= ?
-            GROUP BY substr(created_at,1,10)
-            """,
-            ((today - timedelta(days=6)).isoformat(),),
-        ).fetchall()
-        activity_map = {row["day"]: int(row["count"] or 0) for row in activity_rows}
         arabic_days = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+
+        if allowed_codes:
+            placeholders = ",".join("?" for _ in allowed_codes)
+            type_rows = conn.execute(
+                f"""
+                SELECT
+                    dt.code,
+                    dt.name_ar,
+                    COUNT(d.id) AS count,
+                    SUM(CASE WHEN d.status='saved' THEN 1 ELSE 0 END) AS saved_count,
+                    SUM(CASE WHEN d.status='draft' THEN 1 ELSE 0 END) AS draft_count
+                FROM document_types dt
+                LEFT JOIN documents d ON d.document_type_id=dt.id
+                WHERE dt.is_active=1 AND dt.code IN ({placeholders})
+                GROUP BY dt.id, dt.code, dt.name_ar
+                ORDER BY dt.id
+                """,
+                allowed_codes,
+            ).fetchall()
+            recent = conn.execute(
+                DOCUMENT_SELECT + f" WHERE dt.code IN ({placeholders}) ORDER BY d.updated_at DESC LIMIT 8",
+                allowed_codes,
+            ).fetchall()
+            totals = conn.execute(
+                f"""
+                SELECT
+                    COUNT(*) AS total_documents,
+                    SUM(CASE WHEN d.status='saved' THEN 1 ELSE 0 END) AS saved_documents,
+                    SUM(CASE WHEN d.status='draft' THEN 1 ELSE 0 END) AS draft_documents,
+                    COALESCE(SUM(d.print_count),0) AS printed_total
+                FROM documents d
+                JOIN document_types dt ON dt.id=d.document_type_id
+                WHERE dt.code IN ({placeholders})
+                """,
+                allowed_codes,
+            ).fetchone()
+            today_count = conn.execute(
+                f"""SELECT COUNT(*) AS count FROM documents d
+                    JOIN document_types dt ON dt.id=d.document_type_id
+                    WHERE dt.code IN ({placeholders}) AND substr(d.created_at,1,10)=?""",
+                [*allowed_codes, today.isoformat()],
+            ).fetchone()["count"]
+            attachment_count = conn.execute(
+                f"""SELECT COUNT(*) AS count FROM attachments a
+                    JOIN documents d ON d.id=a.document_id
+                    JOIN document_types dt ON dt.id=d.document_type_id
+                    WHERE dt.code IN ({placeholders})""",
+                allowed_codes,
+            ).fetchone()["count"]
+            activity_rows = conn.execute(
+                f"""
+                SELECT substr(d.created_at,1,10) AS day, COUNT(*) AS count
+                FROM documents d
+                JOIN document_types dt ON dt.id=d.document_type_id
+                WHERE dt.code IN ({placeholders}) AND substr(d.created_at,1,10) >= ?
+                GROUP BY substr(d.created_at,1,10)
+                """,
+                [*allowed_codes, (today - timedelta(days=6)).isoformat()],
+            ).fetchall()
+        else:
+            type_rows = []
+            recent = []
+            totals = {"total_documents": 0, "saved_documents": 0, "draft_documents": 0, "printed_total": 0}
+            today_count = 0
+            attachment_count = 0
+            activity_rows = []
+
+        activity_map = {row["day"]: int(row["count"] or 0) for row in activity_rows}
         weekly_activity = []
         for offset in range(6, -1, -1):
             day = today - timedelta(days=offset)
@@ -411,8 +558,8 @@ def dashboard(_: Annotated[CurrentUser, Depends(require("documents.read"))]):
 
 @app.get("/api/documents")
 def list_documents(
-    _: Annotated[CurrentUser, Depends(require("documents.read"))],
-    type_code: str | None = Query(default=None, max_length=4),
+    user: Annotated[CurrentUser, Depends(require("documents.read"))],
+    type_code: str | None = Query(default=None, max_length=8),
     q: str | None = Query(default=None, max_length=200),
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=500),
@@ -422,9 +569,18 @@ def list_documents(
     try:
         where: list[str] = []
         params: list[Any] = []
+        allowed_codes = _allowed_document_codes(conn, user)
         if type_code:
+            normalized_type = type_code.upper()
+            _require_document_code_access(conn, user, normalized_type)
             where.append("dt.code=?")
-            params.append(type_code.upper())
+            params.append(normalized_type)
+        elif user.role != "admin":
+            if not allowed_codes:
+                return []
+            placeholders = ",".join("?" for _ in allowed_codes)
+            where.append(f"dt.code IN ({placeholders})")
+            params.extend(allowed_codes)
         if q:
             where.append("(d.document_number LIKE ? OR d.field_values_json LIKE ?)")
             term = f"%{q.strip()}%"
@@ -445,8 +601,8 @@ def list_documents(
 
 @app.get("/api/reports/documents.csv")
 def export_documents_csv(
-    _: Annotated[CurrentUser, Depends(require("documents.read"))],
-    type_code: str | None = Query(default=None, max_length=4),
+    user: Annotated[CurrentUser, Depends(require("documents.read"))],
+    type_code: str | None = Query(default=None, max_length=8),
     q: str | None = Query(default=None, max_length=200),
     status_filter: str | None = Query(default=None, alias="status"),
 ):
@@ -455,9 +611,18 @@ def export_documents_csv(
     try:
         where: list[str] = []
         params: list[Any] = []
+        allowed_codes = _allowed_document_codes(conn, user)
         if type_code:
+            normalized_type = type_code.upper()
+            _require_document_code_access(conn, user, normalized_type)
             where.append("dt.code=?")
-            params.append(type_code.upper())
+            params.append(normalized_type)
+        elif user.role != "admin":
+            if not allowed_codes:
+                return []
+            placeholders = ",".join("?" for _ in allowed_codes)
+            where.append(f"dt.code IN ({placeholders})")
+            params.extend(allowed_codes)
         if q:
             where.append("(d.document_number LIKE ? OR d.field_values_json LIKE ?)")
             term = f"%{q.strip()}%"
@@ -491,6 +656,7 @@ def create_document(
 ):
     conn = connect()
     try:
+        _require_document_code_access(conn, user, payload.type_code)
         with transaction(conn, immediate=True):
             type_row = _load_type(conn, payload.type_code)
             sequence_sql = "SELECT next_value FROM number_sequences WHERE document_type_id=?"
@@ -536,13 +702,14 @@ def create_document(
 @app.get("/api/documents/{document_id}")
 def get_document(
     document_id: int,
-    _: Annotated[CurrentUser, Depends(require("documents.read"))],
+    user: Annotated[CurrentUser, Depends(require("documents.read"))],
 ):
     conn = connect()
     try:
         row = conn.execute(DOCUMENT_SELECT + " WHERE d.id=?", (document_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="المستند غير موجود")
+        _require_document_code_access(conn, user, str(row["type_code"]))
         return _document_dict(conn, row, include_attachments=True)
     finally:
         conn.close()
@@ -556,6 +723,7 @@ def update_document(
 ):
     conn = connect()
     try:
+        _require_document_access(conn, user, document_id)
         with transaction(conn, immediate=True):
             row = conn.execute(
                 "SELECT d.*, dt.* FROM documents d JOIN document_types dt ON dt.id=d.document_type_id WHERE d.id=?",
@@ -600,6 +768,7 @@ def delete_document_permanent(
     conn = connect()
     stored_files: list[str] = []
     try:
+        _require_document_access(conn, user, document_id)
         with transaction(conn, immediate=True):
             row = conn.execute("SELECT document_number FROM documents WHERE id=?", (document_id,)).fetchone()
             if not row:
@@ -628,13 +797,11 @@ def delete_document_permanent(
 @app.get("/api/documents/{document_id}/revisions")
 def document_revisions(
     document_id: int,
-    _: Annotated[CurrentUser, Depends(require("documents.read"))],
+    user: Annotated[CurrentUser, Depends(require("documents.read"))],
 ):
     conn = connect()
     try:
-        exists = conn.execute("SELECT id FROM documents WHERE id=?", (document_id,)).fetchone()
-        if not exists:
-            raise HTTPException(status_code=404, detail="المستند غير موجود")
+        _require_document_access(conn, user, document_id)
         rows = conn.execute(
             """
             SELECT r.*, u.full_name AS changed_by_name
@@ -683,8 +850,7 @@ async def upload_attachment(
     temp_path: Path | None = None
     uploaded_object: str | None = None
     try:
-        if not conn.execute("SELECT id FROM documents WHERE id=?", (document_id,)).fetchone():
-            raise HTTPException(status_code=404, detail="المستند غير موجود")
+        _require_document_access(conn, user, document_id)
         original_name = _safe_filename(x_file_name)
         suffix = Path(original_name).suffix.lower()[:12]
         stored_name = f"attachments/{document_id}/{uuid4().hex}{suffix}"
@@ -769,9 +935,7 @@ def update_attachment(
     conn = connect()
     try:
         with transaction(conn, immediate=True):
-            row = conn.execute("SELECT * FROM attachments WHERE id=?", (attachment_id,)).fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="المرفق غير موجود")
+            row = _require_attachment_access(conn, user, attachment_id)
             conn.execute(
                 "UPDATE attachments SET notes=?, print_order=? WHERE id=?",
                 (payload.notes.strip(), payload.print_order, attachment_id),
@@ -785,14 +949,12 @@ def update_attachment(
 @app.get("/api/attachments/{attachment_id}/file")
 def attachment_file(
     attachment_id: int,
-    _: Annotated[CurrentUser, Depends(require("documents.read"))],
+    user: Annotated[CurrentUser, Depends(require("documents.read"))],
     download: bool = False,
 ):
     conn = connect()
     try:
-        row = conn.execute("SELECT * FROM attachments WHERE id=?", (attachment_id,)).fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="المرفق غير موجود")
+        row = _require_attachment_access(conn, user, attachment_id)
         suffix = Path(row["original_name"]).suffix[:12]
         temp_path = GENERATED_DIR / f"download-{attachment_id}-{uuid4().hex}{suffix}"
         try:
@@ -823,9 +985,7 @@ def delete_attachment(
     stored_name: str | None = None
     try:
         with transaction(conn, immediate=True):
-            row = conn.execute("SELECT * FROM attachments WHERE id=?", (attachment_id,)).fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="المرفق غير موجود")
+            row = _require_attachment_access(conn, user, attachment_id)
             stored_name = row["stored_name"]
             audit(
                 conn,
@@ -858,6 +1018,7 @@ def print_document(
         row = conn.execute(DOCUMENT_SELECT + " WHERE d.id=?", (document_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="المستند غير موجود")
+        _require_document_code_access(conn, user, str(row["type_code"]))
         selected: list[Record] = []
         if payload.attachment_ids:
             placeholders = ",".join("?" for _ in payload.attachment_ids)
@@ -935,6 +1096,7 @@ def create_user(
                 """,
                 (payload.full_name.strip(), payload.username.strip(), salt, password_hash, payload.role, now, now),
             )
+            ensure_user_page_permissions(conn, int(cursor.lastrowid))
             audit(
                 conn,
                 user_id=current.id,
@@ -980,6 +1142,7 @@ def update_user(
                 )
                 if not payload.is_active:
                     conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+            ensure_user_page_permissions(conn, user_id)
             audit(
                 conn,
                 user_id=current.id,
@@ -990,6 +1153,73 @@ def update_user(
             )
         updated = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
         return _user_dict(updated)
+    finally:
+        conn.close()
+
+
+@app.get("/api/permissions")
+def permissions_matrix(_: Annotated[CurrentUser, Depends(require("users.manage"))]):
+    conn = connect()
+    try:
+        pages = _managed_pages(conn)
+        page_keys = [item["key"] for item in pages]
+        users = conn.execute("SELECT * FROM users ORDER BY created_at DESC").fetchall()
+        result_users = []
+        for row in users:
+            if row["role"] == "admin":
+                allowed = list(page_keys)
+            else:
+                ensure_user_page_permissions(conn, int(row["id"]))
+                allowed = _allowed_page_keys(conn, int(row["id"]), str(row["role"]))
+            item = _user_dict(row)
+            item["page_permissions"] = allowed
+            result_users.append(item)
+        return {"pages": pages, "users": result_users}
+    finally:
+        conn.close()
+
+
+@app.put("/api/permissions/users/{user_id}")
+def update_page_permissions(
+    user_id: int,
+    payload: PagePermissionsUpdateRequest,
+    current: Annotated[CurrentUser, Depends(require("users.manage"))],
+):
+    conn = connect()
+    try:
+        with transaction(conn, immediate=True):
+            target = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+            if not target:
+                raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+            if target["role"] == "admin":
+                raise HTTPException(status_code=422, detail="مدير النظام يمتلك جميع الصفحات تلقائياً")
+            pages = _managed_pages(conn)
+            valid_keys = {item["key"] for item in pages}
+            requested = set(payload.page_keys)
+            unknown = requested - valid_keys
+            if unknown:
+                raise HTTPException(status_code=422, detail="توجد صفحة غير معروفة ضمن الصلاحيات المطلوبة")
+            ensure_user_page_permissions(conn, user_id)
+            now = utc_iso()
+            for page_key in valid_keys:
+                conn.execute(
+                    """
+                    INSERT INTO user_page_permissions(user_id, page_key, can_view, updated_at, updated_by)
+                    VALUES(?,?,?,?,?)
+                    ON CONFLICT(user_id,page_key) DO UPDATE SET
+                        can_view=excluded.can_view, updated_at=excluded.updated_at, updated_by=excluded.updated_by
+                    """,
+                    (user_id, page_key, int(page_key in requested), now, current.id),
+                )
+            audit(
+                conn,
+                user_id=current.id,
+                action="permission.update",
+                entity_type="user",
+                entity_id=user_id,
+                details={"page_keys": sorted(requested)},
+            )
+        return {"ok": True, "user_id": user_id, "page_permissions": sorted(requested)}
     finally:
         conn.close()
 

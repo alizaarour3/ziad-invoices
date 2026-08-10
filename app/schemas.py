@@ -52,6 +52,20 @@ class UserUpdateRequest(BaseModel):
     password: str | None = Field(default=None, min_length=10, max_length=200)
 
 
+class PagePermissionsUpdateRequest(BaseModel):
+    page_keys: list[str] = Field(default_factory=list, max_length=100)
+
+    @field_validator("page_keys")
+    @classmethod
+    def normalize_page_keys(cls, value: list[str]) -> list[str]:
+        cleaned = []
+        for item in value:
+            key = str(item).strip()
+            if key and key not in cleaned:
+                cleaned.append(key)
+        return cleaned
+
+
 class AttachmentNotesRequest(BaseModel):
     notes: str = Field(default="", max_length=1000)
     print_order: int = Field(default=0, ge=0, le=10000)

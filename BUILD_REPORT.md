@@ -1,30 +1,36 @@
-# Ziad Invoices Professional v3.3.8 — Build Report
+# Ziad Invoices Professional v3.3.9 — Build Report
 
 ## Scope
 
-v3.3.8 fixes the exact HTML template preview bridge used by the document editor. It keeps the v3.3.7 zoom controls and v3.3.6 full-A4 fit behavior.
+v3.3.9 adds a fifth active document type, `TR` (تحويل), and an admin-only page-permission manager while preserving the v3.3.8 exact-HTML preview, v3.3.7 zoom, and v3.3.6 full-A4-fit behavior.
 
-## Fixed
+## Transfer document
 
-- Payment Request (`PR`) no longer opens as an oversized/cropped template.
-- Payment Voucher (`PV`) no longer appears as a blank white A4 page.
-- Vehicle Maintenance (`VM`) no longer appears as a blank white A4 page.
-- Multi-line field navigation no longer calls `querySelector('')` on the last line.
-- RTL iframe geometry is normalized to LTR only for page placement, while the original template root writing direction is preserved for Arabic content.
-- The inner HTML template now scales using its true `offsetWidth`/`offsetHeight`, not a transformed bounding rectangle.
-- Both width and height are used when fitting the inner template into the editor iframe.
-- Template-local transforms cannot overwrite the editor preview scale.
+- New document type: `TR` / تحويل.
+- Independent sequence: `TR-000001`, `TR-000002`, ...
+- Exact uploaded HTML stored at `app/static/form-templates/request-transfer.html`.
+- Source SHA-256: `02560523c3cf78c0e4bd948e6b2961e38e10ae727deacd5c076c3783cb21ad48`.
+- The template source is preserved byte-for-byte.
+- Runtime bridge hides the template-local toolbar and neutralizes its local screen transform only inside the app editor.
+- Print stays A4 and uses the same HTML template through Chromium/Playwright.
+- The uploaded template has no document-number field, so the generated TR number remains in the application header/database rather than being placed in an invented position.
 
-## Preserved
+## Page permissions
 
-- The four uploaded HTML template files are byte-for-byte unchanged.
-- Zoom remains 50%–250% and editor-only.
-- Print output remains A4 at original template dimensions.
-- No database schema or Supabase change is required.
+- New admin page: صلاحيات.
+- Managed business pages: dashboard + every active document type.
+- New database table: `user_page_permissions`.
+- Database schema version: 4.
+- Existing users receive all current business pages by default at migration time.
+- Admin accounts always have full page visibility.
+- Non-admin users can be limited to any subset of business pages.
+- Enforcement exists in both navigation/UI and document/attachment/report APIs.
 
-## Verification completed
+## Verification
 
-- `node --check app/static/app.js` — PASS.
-- Automated Python test suite — 9/9 PASS.
-- Browser regression rendering of PR/PV/VM/RV in a narrow iframe — all four roots visible and fitted to the page bounds.
-- HTML template SHA-256 values match the v3.3.7 originals.
+- Transfer source `cmp` against the uploaded file: PASS.
+- `node --check app/static/app.js`: PASS.
+- Python compile checks: PASS.
+- Automated test suite: 9/9 PASS.
+- TR HTML-to-PDF regression: PASS.
+- Permission API/UI behavior covered by tests.

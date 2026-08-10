@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover - exercised only when PostgreSQL is requ
     psycopg = None
     dict_row = None
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 INTEGRITY_ERRORS: tuple[type[BaseException], ...] = (sqlite3.IntegrityError,)
 if psycopg is not None:
@@ -204,6 +204,16 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 
+CREATE TABLE IF NOT EXISTS user_page_permissions (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    page_key TEXT NOT NULL,
+    can_view INTEGER NOT NULL DEFAULT 1 CHECK (can_view IN (0,1)),
+    updated_at TEXT NOT NULL,
+    updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    PRIMARY KEY(user_id, page_key)
+);
+CREATE INDEX IF NOT EXISTS idx_user_page_permissions_page ON user_page_permissions(page_key, can_view);
+
 CREATE TABLE IF NOT EXISTS document_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code TEXT NOT NULL UNIQUE,
@@ -308,6 +318,15 @@ POSTGRES_SCHEMA_STATEMENTS = [
     )""",
     "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)",
+    """CREATE TABLE IF NOT EXISTS user_page_permissions (
+        user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        page_key TEXT NOT NULL,
+        can_view INTEGER NOT NULL DEFAULT 1 CHECK (can_view IN (0,1)),
+        updated_at TEXT NOT NULL,
+        updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+        PRIMARY KEY(user_id, page_key)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_user_page_permissions_page ON user_page_permissions(page_key, can_view)",
     """CREATE TABLE IF NOT EXISTS document_types (
         id BIGSERIAL PRIMARY KEY,
         code TEXT NOT NULL UNIQUE,
@@ -408,6 +427,7 @@ def init_db(db_path: Path | None = None) -> None:
             (str(SCHEMA_VERSION),),
         )
         _sync_document_types(conn)
+        _sync_page_permissions(conn)
         conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (utc_iso(),))
     finally:
         conn.close()
@@ -445,6 +465,27 @@ def _sync_document_types(conn: DBConnection) -> None:
             "ON CONFLICT(document_type_id) DO NOTHING",
             (type_id,),
         )
+
+
+def permission_page_keys(conn: DBConnection) -> list[str]:
+    rows = conn.execute("SELECT code FROM document_types WHERE is_active=1 ORDER BY id").fetchall()
+    return ["dashboard", *[f"documents.{row['code']}" for row in rows]]
+
+
+def ensure_user_page_permissions(conn: DBConnection, user_id: int) -> None:
+    now = utc_iso()
+    for page_key in permission_page_keys(conn):
+        conn.execute(
+            "INSERT INTO user_page_permissions(user_id, page_key, can_view, updated_at, updated_by) "
+            "VALUES(?,?,1,?,NULL) ON CONFLICT(user_id,page_key) DO NOTHING",
+            (user_id, page_key, now),
+        )
+
+
+def _sync_page_permissions(conn: DBConnection) -> None:
+    rows = conn.execute("SELECT id FROM users").fetchall()
+    for row in rows:
+        ensure_user_page_permissions(conn, int(row["id"]))
 
 
 def audit(

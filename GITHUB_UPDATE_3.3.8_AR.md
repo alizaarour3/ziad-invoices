@@ -1,14 +1,9 @@
-# رفع تحديث 3.3.8 إلى GitHub وRender
+# ملاحظة حول دليل 3.3.8
 
-انسخ محتويات Patch 3.3.8 فوق مشروع 3.3.7 ووافق على Replace، ثم نفذ:
+هذا الملف محفوظ فقط حتى لا تبقى تعليمات قديمة بعد نسخ Patch فوق المشروع.
 
-```powershell
-git status
-git add .
-git commit -m "Fix exact HTML template preview scaling v3.3.8"
-git push origin main
-```
+للتحديث الحالي استخدم:
 
-Render سيبدأ Deploy تلقائياً إذا كان Auto Deploy مفعلاً. بعد ظهور Live استخدم Ctrl+F5 لمسح ملفات JavaScript/CSS القديمة من Cache.
+`GITHUB_UPDATE_3.3.9_AR.md`
 
-لا يوجد أي SQL جديد ولا تغيير مطلوب في Supabase.
+وتجاهل تعليمات رفع 3.3.8 القديمة.
