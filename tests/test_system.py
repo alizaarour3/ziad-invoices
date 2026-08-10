@@ -223,7 +223,7 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.9'
+        assert status_data['version'] == '3.3.10'
         assert status_data['database']['ok'] is True
         assert status_data['counts']['documents'] == 1
         assert len(status_data['templates']) == 15
@@ -244,8 +244,24 @@ def test_system_status_and_backup():
             assert 'app/static/form-templates/receipt-voucher.html' in names
             assert 'app/static/form-templates/request-transfer.html' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.9'
+            assert manifest['version'] == '3.3.10'
             assert manifest['files']
+
+
+def test_html_template_static_urls_are_served():
+    template_names = [
+        'receipt-voucher.html',
+        'payment-request.html',
+        'payment-voucher.html',
+        'vehicle-maintenance.html',
+        'request-transfer.html',
+    ]
+    with TestClient(app) as client:
+        for name in template_names:
+            response = client.get(f'/form-templates/{name}')
+            assert response.status_code == 200, f'{name}: {response.text[:200]}'
+            assert response.headers['content-type'].startswith('text/html')
+            assert '<html' in response.text.lower() or '<!doctype html' in response.text.lower()
 
 
 def test_account_lockout_and_password_change():

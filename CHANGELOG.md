@@ -1,3 +1,11 @@
+# v3.3.10 - HTML Template 404 Fix
+
+- Fixed `{"detail":"Not Found"}` appearing inside the document editor.
+- Ensured all five exact HTML templates are shipped under `app/static/form-templates/`.
+- Added a missing-template guard that keeps Save disabled if the template cannot load.
+- Added cache-busting for HTML template iframe requests.
+- Added static-route regression coverage for every HTML template.
+
 # سجل التغييرات
 
 ## 3.3.9
