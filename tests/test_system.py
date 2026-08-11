@@ -224,7 +224,7 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.15'
+        assert status_data['version'] == '3.3.16'
         assert status_data['database']['ok'] is True
         assert status_data['counts']['documents'] == 1
         assert len(status_data['templates']) == 15
@@ -245,7 +245,7 @@ def test_system_status_and_backup():
             assert 'app/static/form-templates/receipt-voucher.html' in names
             assert 'app/static/form-templates/request-transfer.html' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.15'
+            assert manifest['version'] == '3.3.16'
             assert manifest['files']
 
 
@@ -589,3 +589,39 @@ def test_v3315_loan_report_is_in_app_and_popup_free():
     assert "window.open('', '_blank')" not in javascript
     assert ".loan-report-paper" in stylesheet
     assert "loan-report-print-btn" in javascript
+
+
+def test_supabase_security_hardening_statements():
+    from app.db import SUPABASE_APP_TABLES, _harden_supabase_public_schema
+
+    class Result:
+        def __init__(self, rows=None):
+            self.rows = rows or []
+
+        def fetchall(self):
+            return self.rows
+
+    class FakeConn:
+        is_postgres = True
+
+        def __init__(self):
+            self.statements = []
+
+        def execute(self, sql, params=()):
+            self.statements.append(sql)
+            if "FROM pg_roles" in sql:
+                return Result([
+                    {"rolname": "anon"},
+                    {"rolname": "authenticated"},
+                    {"rolname": "service_role"},
+                ])
+            return Result()
+
+    conn = FakeConn()
+    _harden_supabase_public_schema(conn)
+    sql = "\n".join(conn.statements)
+    for table in SUPABASE_APP_TABLES:
+        assert f'ALTER TABLE public."{table}" ENABLE ROW LEVEL SECURITY' in sql
+        assert f'REVOKE ALL PRIVILEGES ON TABLE public."{table}" FROM anon, authenticated' in sql
+    assert "REVOKE USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated" in sql
+    assert "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM anon, authenticated" in sql

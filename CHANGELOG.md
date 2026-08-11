@@ -1,3 +1,11 @@
+# v3.3.16 - Supabase Public Schema Security Hardening
+
+- Enabled PostgreSQL Row Level Security on every Ziad Invoices table in the exposed `public` schema when running on Supabase.
+- Revoked direct Data API privileges from the `anon` and `authenticated` roles because the application accesses PostgreSQL only through its FastAPI backend.
+- Revoked default table/sequence privileges for those roles so future application tables are private by default.
+- Added a one-time `SUPABASE_SECURITY_FIX.sql` for already deployed databases plus verification queries.
+- Database schema security version is now 6. No application data is deleted or rewritten.
+
 # v3.3.15 - In-App Loan Report / Popup Blocker Fix
 
 - Loan reports now open inside the application instead of a browser popup.

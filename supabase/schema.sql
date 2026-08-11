@@ -153,3 +153,26 @@ create table if not exists public.settings (
 insert into storage.buckets (id, name, public)
 values ('ziad-invoices', 'ziad-invoices', false)
 on conflict (id) do nothing;
+
+-- Security hardening: application data is server-side only.  Do not expose these tables
+-- through Supabase Data API browser roles.
+do $$
+declare
+  table_name text;
+begin
+  foreach table_name in array array[
+    'schema_meta','users','sessions','user_page_permissions','document_types',
+    'number_sequences','documents','document_revisions','attachments','loans',
+    'loan_payments','audit_logs','settings'
+  ]
+  loop
+    execute format('alter table public.%I enable row level security', table_name);
+    execute format('revoke all privileges on table public.%I from anon, authenticated', table_name);
+  end loop;
+end $$;
+
+revoke usage, select on all sequences in schema public from anon, authenticated;
+alter default privileges for role postgres in schema public
+  revoke select, insert, update, delete on tables from anon, authenticated;
+alter default privileges for role postgres in schema public
+  revoke usage, select on sequences from anon, authenticated;

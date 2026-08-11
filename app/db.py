@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover - exercised only when PostgreSQL is requ
     psycopg = None
     dict_row = None
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 INTEGRITY_ERRORS: tuple[type[BaseException], ...] = (sqlite3.IntegrityError,)
 if psycopg is not None:
@@ -459,6 +459,54 @@ POSTGRES_SCHEMA_STATEMENTS = [
 ]
 
 
+SUPABASE_APP_TABLES = (
+    "schema_meta",
+    "users",
+    "sessions",
+    "user_page_permissions",
+    "document_types",
+    "number_sequences",
+    "documents",
+    "document_revisions",
+    "attachments",
+    "loans",
+    "loan_payments",
+    "audit_logs",
+    "settings",
+)
+
+
+def _harden_supabase_public_schema(conn: DBConnection) -> None:
+    """Keep application tables private from Supabase Data API roles.
+
+    Ziad Invoices authenticates users in FastAPI and talks to PostgreSQL server-side.
+    Browser clients never need direct anon/authenticated table access.  Enabling RLS and
+    removing those grants closes the public-schema exposure reported by Supabase Advisors
+    while keeping the server-side postgres owner connection working.
+    """
+    if not conn.is_postgres:
+        return
+    role_rows = conn.execute(
+        "SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role')"
+    ).fetchall()
+    roles = {str(row["rolname"]) for row in role_rows}
+    if not {"anon", "authenticated", "service_role"}.issubset(roles):
+        return
+
+    for table in SUPABASE_APP_TABLES:
+        conn.execute(f'ALTER TABLE public."{table}" ENABLE ROW LEVEL SECURITY')
+        conn.execute(f'REVOKE ALL PRIVILEGES ON TABLE public."{table}" FROM anon, authenticated')
+
+    conn.execute("REVOKE USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated")
+    conn.execute(
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
+        "REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM anon, authenticated"
+    )
+    conn.execute(
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
+        "REVOKE USAGE, SELECT ON SEQUENCES FROM anon, authenticated"
+    )
+
 def _run_sqlite_script(conn: DBConnection, script: str) -> None:
     conn.raw.executescript(script)
 
@@ -472,6 +520,7 @@ def init_db(db_path: Path | None = None) -> None:
                     conn.execute(statement)
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_count INTEGER NOT NULL DEFAULT 0")
                 conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TEXT")
+                _harden_supabase_public_schema(conn)
         else:
             _run_sqlite_script(conn, SQLITE_SCHEMA)
             user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
