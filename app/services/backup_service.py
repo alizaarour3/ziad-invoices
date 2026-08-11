@@ -12,7 +12,7 @@ from ..db import connect
 from ..settings import BACKUPS_DIR, DATABASE_BACKEND, DB_PATH, PROJECT_DIR, TEMPLATES_DIR
 from .storage_service import storage
 
-APP_VERSION = "3.3.14"
+APP_VERSION = "3.3.15"
 
 
 def _sha256(path: Path) -> str:

@@ -224,7 +224,7 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.14'
+        assert status_data['version'] == '3.3.15'
         assert status_data['database']['ok'] is True
         assert status_data['counts']['documents'] == 1
         assert len(status_data['templates']) == 15
@@ -245,7 +245,7 @@ def test_system_status_and_backup():
             assert 'app/static/form-templates/receipt-voucher.html' in names
             assert 'app/static/form-templates/request-transfer.html' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.14'
+            assert manifest['version'] == '3.3.15'
             assert manifest['files']
 
 
@@ -575,3 +575,17 @@ def test_v3314_transfer_workspace_and_dashboard_ui_contract():
     assert '.transfer-summary-grid' in stylesheet
     assert '.dashboard-kpi-grid' in stylesheet
     assert hashlib.sha256(transfer_html.read_bytes()).hexdigest() == '02560523c3cf78c0e4bd948e6b2961e38e10ae727deacd5c076c3783cb21ad48'
+
+
+def test_v3315_loan_report_is_in_app_and_popup_free():
+    project = Path(__file__).resolve().parents[1]
+    javascript = (project / 'app' / 'static' / 'app.js').read_text(encoding='utf-8')
+    stylesheet = (project / 'app' / 'static' / 'styles.css').read_text(encoding='utf-8')
+
+    assert "navigate(`/loans/${loan.id}/report`)" in javascript
+    assert "renderLoanReport" in javascript
+    assert "loanReportMatch" in javascript
+    assert "اسمح للنظام بفتح نافذة التقرير" not in javascript
+    assert "window.open('', '_blank')" not in javascript
+    assert ".loan-report-paper" in stylesheet
+    assert "loan-report-print-btn" in javascript

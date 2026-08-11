@@ -292,7 +292,7 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
       <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-head">
-          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.14</span></div></div>
+          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.15</span></div></div>
           <button id="sidebar-close" class="btn btn-icon btn-link sidebar-close" aria-label="إغلاق القائمة">${icon('close')}</button>
         </div>
         <nav class="sidebar-nav">
@@ -942,7 +942,7 @@ async function renderDocumentEditor(id, mode) {
   const useHtmlTemplate = doc.type.config.template_engine === 'html' && Boolean(doc.type.config.html_template);
   const fields = useHtmlTemplate ? '' : doc.type.config.fields.map(field => fieldHtml(field, doc.fields[field.key], viewOnly)).join('');
   const templateMarkup = useHtmlTemplate
-    ? `<iframe id="template-frame" class="html-template-frame" src="/form-templates/${encodeURIComponent(doc.type.config.html_template)}?v=3.3.14" title="${escapeHtml(doc.type.name_ar)}"></iframe>`
+    ? `<iframe id="template-frame" class="html-template-frame" src="/form-templates/${encodeURIComponent(doc.type.config.html_template)}?v=3.3.15" title="${escapeHtml(doc.type.name_ar)}"></iframe>`
     : `<img class="template-bg" src="${doc.type.image_url}" alt="${escapeHtml(doc.type.name_ar)}">${fields}`;
   const attachments = attachmentsHtml(doc.attachments || [], viewOnly);
   const primaryAction = viewOnly ? (state.user.role !== 'viewer' ? `<button id="edit-document" class="btn btn-primary">${icon('edit')} تعديل</button>` : '') : `<select id="document-status" class="control compact status-control"><option value="saved" ${doc.status === 'saved' ? 'selected' : ''}>محفوظ</option><option value="draft" ${doc.status === 'draft' ? 'selected' : ''}>مسودة</option></select><button id="save-document" class="btn btn-primary">${icon('save')} حفظ</button>`;
@@ -1192,52 +1192,38 @@ function wireLoanActions(loans, onChanged = renderLoans) {
 }
 
 
-async function openLoanReport(loan) {
-  const reportWindow = window.open('', '_blank');
-  if (!reportWindow) return toast('اسمح للنظام بفتح نافذة التقرير ثم حاول مرة أخرى', 'error');
-  try { reportWindow.opener = null; } catch (_) {}
-  reportWindow.document.open();
-  reportWindow.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير القرض</title></head><body style="font-family:Arial,Tahoma,sans-serif;padding:32px;direction:rtl">جارٍ تجهيز التقرير...</body></html>`);
-  reportWindow.document.close();
-  try {
-    const full = loan?.payments ? loan : await api(`/api/loans/${loan.id}`);
-    const payments = full.payments || [];
-    const paidAmount = Number(full.paid_amount || 0);
-    const statusText = full.status === 'paid' ? 'مسدد بالكامل' : 'قائم';
-    const rows = payments.map((p, index) => `<tr><td>${payments.length-index}</td><td>${formatMoney(p.amount)}</td><td>${formatMoney(p.remaining_amount_after)}</td><td>${p.months_remaining_after}</td><td>${escapeHtml(p.paid_by_name || '-')}</td><td>${formatDate(p.paid_at,true)}</td><td>${escapeHtml(p.notes || '-')}</td></tr>`).join('');
-    const generatedAt = new Date().toLocaleString('ar-IQ');
-    reportWindow.document.open();
-    reportWindow.document.write(`<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>تقرير قرض - ${escapeHtml(full.borrower_name)}</title>
-<style>
-@page{size:A4 portrait;margin:14mm}*{box-sizing:border-box}body{margin:0;color:#14231d;background:#fff;font-family:Arial,Tahoma,sans-serif;direction:rtl}.report{max-width:190mm;margin:0 auto}.top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:3px solid #0c6b4e;padding-bottom:14px;margin-bottom:18px}.top h1{margin:0 0 6px;font-size:25px}.top p{margin:0;color:#66736d;font-size:13px}.status{display:inline-flex;border:1px solid #bcd6cd;border-radius:999px;padding:7px 13px;font-weight:800;color:#0c6b4e;background:#eef7f3}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0 22px}.card{border:1px solid #d9dedb;border-radius:12px;padding:13px;min-height:76px}.card span{display:block;color:#66736d;font-size:12px;margin-bottom:7px}.card strong{font-size:18px}.card.em{background:#eef7f3;border-color:#bcd6cd}.card.em strong{color:#0c6b4e}h2{font-size:18px;margin:24px 0 10px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #d9dedb;padding:8px 7px;text-align:right;vertical-align:top}th{background:#f4f2ea;font-weight:800}.meta{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:16px;padding-top:12px;border-top:1px solid #d9dedb;color:#66736d;font-size:11px}.meta strong{color:#14231d}.actions{display:flex;gap:8px;margin:0 0 18px}.actions button{border:0;border-radius:8px;padding:9px 15px;font-weight:800;cursor:pointer}.print{background:#0c6b4e;color:#fff}.close{background:#eee;color:#222}.empty{padding:18px;text-align:center;color:#66736d}@media print{.actions{display:none}.report{max-width:none}.top{margin-top:0}}@media(max-width:720px){body{padding:14px}.grid{grid-template-columns:1fr 1fr}.top{flex-direction:column}}@media(max-width:460px){.grid{grid-template-columns:1fr}}
-</style>
-</head>
-<body>
-<main class="report">
-  <div class="actions"><button class="print" onclick="window.print()">طباعة / حفظ PDF</button><button class="close" onclick="window.close()">إغلاق</button></div>
-  <header class="top"><div><p>نظام المستندات — تقرير القروض</p><h1>${escapeHtml(full.borrower_name)}</h1><p>تقرير مالي يوضح القرض وجميع عمليات التسديد حتى تاريخ إنشاء التقرير.</p></div><span class="status">${statusText}</span></header>
-  <section class="grid">
-    <div class="card"><span>مبلغ القرض</span><strong>${formatMoney(full.principal_amount)}</strong></div>
-    <div class="card"><span>إجمالي المسدد</span><strong>${formatMoney(paidAmount)}</strong></div>
-    <div class="card em"><span>المبلغ المتبقي</span><strong>${formatMoney(full.remaining_amount)}</strong></div>
-    <div class="card"><span>عدد الأشهر</span><strong>${full.months_total}</strong></div>
-    <div class="card em"><span>الأشهر الباقية</span><strong>${full.remaining_months}</strong></div>
-    <div class="card"><span>المبلغ المحدد (الحد الأدنى)</span><strong>${formatMoney(full.minimum_payment)}</strong></div>
-  </section>
-  <h2>سجل التسديدات</h2>
-  <table><thead><tr><th>#</th><th>مبلغ التسديد</th><th>المبلغ الباقي</th><th>الأشهر الباقية</th><th>المستخدم</th><th>التاريخ</th><th>ملاحظة</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="empty">لم يتم تسجيل أي تسديد بعد.</td></tr>`}</tbody></table>
-  <footer class="meta"><span>تاريخ إنشاء القرض: <strong>${formatDate(full.created_at,true)}</strong></span><span>آخر تعديل: <strong>${formatDate(full.updated_at,true)}</strong></span><span>أنشأه: <strong>${escapeHtml(full.created_by_name || '-')}</strong></span><span>تاريخ التقرير: <strong>${escapeHtml(generatedAt)}</strong></span></footer>
-</main>
-</body></html>`);
-    reportWindow.document.close();
-  } catch (err) {
-    reportWindow.document.body.innerHTML = `<div style="font-family:Arial,Tahoma,sans-serif;direction:rtl;padding:30px;color:#9b2c2c"><h2>تعذر إنشاء التقرير</h2><p>${escapeHtml(err.message || 'خطأ غير معروف')}</p></div>`;
-  }
+function openLoanReport(loan) {
+  if (!loan?.id) return toast('تعذر تحديد القرض المطلوب', 'error');
+  navigate(`/loans/${loan.id}/report`);
+}
+
+async function renderLoanReport(id) {
+  pageLoading('تقرير القرض');
+  const full = await api(`/api/loans/${id}`);
+  const payments = full.payments || [];
+  const paidAmount = Number(full.paid_amount || 0);
+  const statusText = full.status === 'paid' ? 'مسدد بالكامل' : 'قائم';
+  const rows = payments.map((p, index) => `<tr><td>${payments.length-index}</td><td>${formatMoney(p.amount)}</td><td>${formatMoney(p.remaining_amount_after)}</td><td>${p.months_remaining_after}</td><td>${escapeHtml(p.paid_by_name || '-')}</td><td>${formatDate(p.paid_at,true)}</td><td>${escapeHtml(p.notes || '-')}</td></tr>`).join('');
+  const generatedAt = new Date().toLocaleString('ar-IQ');
+  shell('تقرير القرض', `
+    <div class="page-header loan-report-screen-header">
+      <div><span class="eyebrow">قروض</span><h1>تقرير ${escapeHtml(full.borrower_name)}</h1><p>التقرير يفتح داخل النظام مباشرة ولا يحتاج السماح بالنوافذ المنبثقة.</p></div>
+      <div class="page-actions"><a class="btn btn-secondary" href="#/loans/${full.id}">${icon('chevron')} رجوع للقرض</a><button id="loan-report-print-btn" class="btn btn-primary">${icon('print')} طباعة / حفظ PDF</button></div>
+    </div>
+    <article class="loan-report-paper" id="loan-report-paper">
+      <header class="loan-report-top"><div><p>نظام المستندات — تقرير القروض</p><h2>${escapeHtml(full.borrower_name)}</h2><p>تقرير مالي يوضح القرض وجميع عمليات التسديد حتى تاريخ إنشاء التقرير.</p></div><span class="loan-report-status ${full.status === 'paid' ? 'paid' : ''}">${statusText}</span></header>
+      <section class="loan-report-grid">
+        <div class="loan-report-card"><span>مبلغ القرض</span><strong>${formatMoney(full.principal_amount)}</strong></div>
+        <div class="loan-report-card"><span>إجمالي المسدد</span><strong>${formatMoney(paidAmount)}</strong></div>
+        <div class="loan-report-card emphasis"><span>المبلغ المتبقي</span><strong>${formatMoney(full.remaining_amount)}</strong></div>
+        <div class="loan-report-card"><span>عدد الأشهر</span><strong>${full.months_total}</strong></div>
+        <div class="loan-report-card emphasis"><span>الأشهر الباقية</span><strong>${full.remaining_months}</strong></div>
+        <div class="loan-report-card"><span>المبلغ المحدد (الحد الأدنى)</span><strong>${formatMoney(full.minimum_payment)}</strong></div>
+      </section>
+      <section class="loan-report-history"><h3>سجل التسديدات</h3><div class="table-wrap"><table><thead><tr><th>#</th><th>مبلغ التسديد</th><th>المبلغ الباقي</th><th>الأشهر الباقية</th><th>المستخدم</th><th>التاريخ</th><th>ملاحظة</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="empty">لم يتم تسجيل أي تسديد بعد.</td></tr>`}</tbody></table></div></section>
+      <footer class="loan-report-meta"><span>تاريخ إنشاء القرض: <strong>${formatDate(full.created_at,true)}</strong></span><span>آخر تعديل: <strong>${formatDate(full.updated_at,true)}</strong></span><span>أنشأه: <strong>${escapeHtml(full.created_by_name || '-')}</strong></span><span>تاريخ التقرير: <strong>${escapeHtml(generatedAt)}</strong></span></footer>
+    </article>`);
+  document.getElementById('loan-report-print-btn')?.addEventListener('click', () => window.print());
 }
 
 async function renderLoans() {
@@ -1600,6 +1586,8 @@ async function route() {
       return navigate(firstAllowedRoute());
     }
     if (path === '/loans') { if (canViewPage('loans')) return renderLoans(); return navigate(firstAllowedRoute()); }
+    let loanReportMatch = path.match(/^\/loans\/(\d+)\/report$/);
+    if (loanReportMatch) { if (canViewPage('loans')) return renderLoanReport(Number(loanReportMatch[1])); return navigate(firstAllowedRoute()); }
     let loanMatch = path.match(/^\/loans\/(\d+)$/);
     if (loanMatch) { if (canViewPage('loans')) return renderLoanDetails(Number(loanMatch[1])); return navigate(firstAllowedRoute()); }
     if (path === '/users' && state.user.role === 'admin') return renderUsers();

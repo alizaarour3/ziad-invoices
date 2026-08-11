@@ -1,3 +1,11 @@
+# v3.3.15 - In-App Loan Report / Popup Blocker Fix
+
+- Loan reports now open inside the application instead of a browser popup.
+- Removed the popup-permission requirement that triggered the Arabic error toast in Chrome.
+- Added a dedicated in-app loan report route with a print / Save PDF button.
+- Report printing remains A4 and includes the loan summary and full payment history.
+- No database migration and no official form-template changes.
+
 # v3.3.14 - Transfer Workspace & Dashboard Refresh
 
 - Rebuilt the Transfer list as a dedicated professional workspace without changing the original transfer HTML template.
