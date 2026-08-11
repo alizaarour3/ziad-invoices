@@ -1,36 +1,38 @@
-# Ziad Invoices Professional v3.3.9 — Build Report
+# Ziad Invoices Professional v3.3.14 — Build Report
 
 ## Scope
 
-v3.3.9 adds a fifth active document type, `TR` (تحويل), and an admin-only page-permission manager while preserving the v3.3.8 exact-HTML preview, v3.3.7 zoom, and v3.3.6 full-A4-fit behavior.
+This release refreshes the **Transfer workspace** and **Dashboard UI** while preserving the existing document engine, database schema, permissions, loans, attachments, A4 rendering, and all five exact HTML templates.
 
-## Transfer document
+## Transfer workspace
 
-- New document type: `TR` / تحويل.
-- Independent sequence: `TR-000001`, `TR-000002`, ...
-- Exact uploaded HTML stored at `app/static/form-templates/request-transfer.html`.
-- Source SHA-256: `02560523c3cf78c0e4bd948e6b2961e38e10ae727deacd5c076c3783cb21ad48`.
-- The template source is preserved byte-for-byte.
-- Runtime bridge hides the template-local toolbar and neutralizes its local screen transform only inside the app editor.
-- Print stays A4 and uses the same HTML template through Chromium/Playwright.
-- The uploaded template has no document-number field, so the generated TR number remains in the application header/database rather than being placed in an invented position.
+- Dedicated Transfer list UI with transfer-specific header and new-transfer action.
+- Real summary metrics: total requests, saved, drafts, and total of numeric amount fields.
+- Search across request number, beneficiary, transfer entity, department, purpose, amount, and creator.
+- Status and department filters.
+- Specialized table columns for beneficiary/purpose, transfer entity, department, amount/currency, status, creator, and direct actions.
+- Transfer editor/view header now exposes date/entity/amount metadata when available.
+- `request-transfer.html` SHA-256 remains `02560523c3cf78c0e4bd948e6b2961e38e10ae727deacd5c076c3783cb21ad48` (unchanged).
 
-## Page permissions
+## Dashboard
 
-- New admin page: صلاحيات.
-- Managed business pages: dashboard + every active document type.
-- New database table: `user_page_permissions`.
-- Database schema version: 4.
-- Existing users receive all current business pages by default at migration time.
-- Admin accounts always have full page visibility.
-- Non-admin users can be limited to any subset of business pages.
-- Enforcement exists in both navigation/UI and document/attachment/report APIs.
+- New operational hero with current date, current user role, today's document count, and create action.
+- KPI cards are calculated from the real dashboard API response.
+- Dedicated Transfer KPI when Transfer is visible to the user.
+- Per-document-type cards now show saved/draft counts and saved percentage.
+- Live Loans snapshot is loaded only for users who can view the Loans page.
+- Added draft attention cards, latest-document table, 7-day activity, attachment and print metrics.
+
+## Compatibility
+
+- Database schema remains version 5.
+- No new SQL or Supabase migration is required.
+- Existing page permissions continue to control visible dashboard sections and document types.
+- All official HTML templates remain unchanged.
 
 ## Verification
 
-- Transfer source `cmp` against the uploaded file: PASS.
 - `node --check app/static/app.js`: PASS.
-- Python compile checks: PASS.
-- Automated test suite: 9/9 PASS.
-- TR HTML-to-PDF regression: PASS.
-- Permission API/UI behavior covered by tests.
+- Python compile check: PASS.
+- Automated test suite: **12/12 PASS**.
+- Transfer template byte-integrity regression test: PASS.

@@ -1,3 +1,33 @@
+# v3.3.14 - Transfer Workspace & Dashboard Refresh
+
+- Rebuilt the Transfer list as a dedicated professional workspace without changing the original transfer HTML template.
+- Added transfer KPI cards, total numeric amount, status/department filters, richer transfer columns, and a transfer-specific editor header.
+- Redesigned the Dashboard into an operational overview with real KPI cards, transfer metrics, per-type completion bars, recent documents, 7-day activity, draft attention cards, and a live Loans snapshot when the user has Loans permission.
+- The transfer A4 template remains byte-for-byte unchanged; preview, zoom, save, attachments and print behavior remain intact.
+- No database migration or Supabase SQL changes are required.
+- Automated test suite: 12/12 passed.
+
+# v3.3.13 - Loans Direct Page & Printable Report
+
+- Loans remain a normal business page, not an invoice or A4 document template.
+- Direct entry fields stay at the top of the Loans page: الاسم الثلاثي، المبلغ، عدد الأشهر، والمبلغ المحدد.
+- Added a printable per-loan report showing original amount, paid amount, remaining amount, total/remaining months, configured minimum payment, status, and the full repayment history.
+- Added a Report button to both the Loans table and loan details page.
+- Repayment continues to deduct from the remaining balance and reduce the remaining months by one payment cycle; full payoff sets remaining months to zero.
+- No new database migration is required beyond the existing loans schema (schema version 5).
+
+# v3.3.11 - Loans & Repayment Management
+
+- Added a new business page named **قروض** with page-permission support.
+- Added loan fields: الاسم الثلاثي، مبلغ القرض، عدد أشهر التسديد، والحد الأدنى لمبلغ التسديد.
+- Added direct View / Edit / Repay / Permanent Delete actions according to account role.
+- Every repayment deducts from the remaining balance and updates the remaining-month count immediately.
+- Enforced the configured minimum repayment amount. The exact final remaining balance is allowed when it is below the minimum so the loan can be closed cleanly.
+- Added an immutable repayment history with amount, remaining balance, remaining months, user, date, and optional note.
+- Added `loans` and `loan_payments` database tables with automatic startup migration (schema version 5).
+- Added loans to PostgreSQL backup exports, audit logs, system counts, and the Permissions page.
+- Automated test suite: 11/11 passed.
+
 # v3.3.10 - HTML Template 404 Fix
 
 - Fixed `{"detail":"Not Found"}` appearing inside the document editor.

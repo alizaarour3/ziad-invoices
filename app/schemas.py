@@ -87,3 +87,24 @@ class ChangePasswordRequest(BaseModel):
 
 class RestoreBackupRequest(BaseModel):
     confirmation: str
+
+
+class LoanCreateRequest(BaseModel):
+    borrower_name: str = Field(min_length=3, max_length=160)
+    principal_amount: float = Field(gt=0, le=999999999999)
+    months_total: int = Field(ge=1, le=600)
+    minimum_payment: float = Field(gt=0, le=999999999999)
+
+    @field_validator("borrower_name")
+    @classmethod
+    def normalize_borrower_name(cls, value: str) -> str:
+        return " ".join(value.strip().split())
+
+
+class LoanUpdateRequest(LoanCreateRequest):
+    pass
+
+
+class LoanPaymentCreateRequest(BaseModel):
+    amount: float = Field(gt=0, le=999999999999)
+    notes: str = Field(default="", max_length=1000)

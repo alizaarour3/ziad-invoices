@@ -30,6 +30,7 @@ const ICONS = {
   trash: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 10v7M14 10v7"/></svg>',
   users: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 3.5a4 4 0 0 1 0 7.5M17 14a6 6 0 0 1 5 6"/></svg>',
   permissions: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4.5 6v5.5c0 4.5 3.1 7.7 7.5 9.5 4.4-1.8 7.5-5 7.5-9.5V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>',
+  loan: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M16 10h5M7 6V4h10v2M7 14h5"/></svg>',
   audit: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>',
   logout: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 17l5-5-5-5M15 12H3M15 4h5v16h-5"/></svg>',
   menu: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
@@ -46,6 +47,9 @@ const ICONS = {
   chart: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   draft: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3h10l4 4v14H5z"/><path d="M14 3v5h5M8 13h8M8 17h5"/></svg>',
   check: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg>',
+  transfer: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 7h13M17 4l3 3-3 3"/><path d="M17 17H4M7 14l-3 3 3 3"/></svg>',
+  wallet: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H19a2 2 0 0 1 2 2v12H5a2 2 0 0 1-2-2z"/><path d="M3 8h16M16 12h5v4h-5a2 2 0 0 1 0-4Z"/></svg>',
+  clock: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
 };
 
 function icon(name) { return ICONS[name] || ''; }
@@ -64,12 +68,46 @@ function formatBytes(bytes) {
   if (number < 1024 ** 2) return `${(number / 1024).toFixed(1)} KB`;
   return `${(number / (1024 ** 2)).toFixed(1)} MB`;
 }
+function formatMoney(value) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number)) return '0';
+  return new Intl.NumberFormat('ar-IQ', {minimumFractionDigits:Number.isInteger(number)?0:2, maximumFractionDigits:2}).format(number);
+}
+function parseAmountNumber(value) {
+  const arabic = '٠١٢٣٤٥٦٧٨٩';
+  const persian = '۰۱۲۳۴۵۶۷۸۹';
+  const normalized = String(value ?? '')
+    .replace(/[٠-٩]/g, digit => arabic.indexOf(digit))
+    .replace(/[۰-۹]/g, digit => persian.indexOf(digit))
+    .replace(/[٬,\s]/g, '')
+    .replace(/٫/g, '.')
+    .replace(/[^0-9.\-]/g, '');
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : 0;
+}
+function displayDocumentAmount(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '-';
+  const number = parseAmountNumber(raw);
+  return number ? formatMoney(number) : escapeHtml(raw);
+}
+function dashboardGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'صباح الخير';
+  if (hour < 18) return 'مساء الخير';
+  return 'مساء الخير';
+}
+function dashboardDateLabel() {
+  return new Intl.DateTimeFormat('ar-IQ', {weekday:'long', year:'numeric', month:'long', day:'numeric'}).format(new Date());
+}
 function roleLabel(role) { return ({admin:'مدير النظام', editor:'محرر', viewer:'مشاهد'})[role] || role; }
 function canViewPage(pageKey) { return state.user?.role === 'admin' || Boolean(state.user?.page_permissions?.includes(pageKey)); }
 function firstAllowedRoute() {
   if (canViewPage('dashboard')) return '/dashboard';
   const firstType = state.types[0];
-  return firstType ? `/documents/${firstType.code}` : '/no-access';
+  if (firstType) return `/documents/${firstType.code}`;
+  if (canViewPage('loans')) return '/loans';
+  return '/no-access';
 }
 function statusBadge(status) { return `<span class="badge badge-${status}">${status === 'draft' ? 'مسودة' : 'محفوظ'}</span>`; }
 function initials(name) { return String(name || 'U').trim().split(/\s+/).slice(0,2).map(x => x[0]).join('').toUpperCase(); }
@@ -135,7 +173,7 @@ function authLayout(title, description, formHtml) {
       <section class="auth-visual">
         <div class="auth-copy">
           <h1>النماذج الأصلية، داخل نظام احترافي.</h1>
-          <p>اكتب مباشرة على مستندات القبض والصرف والدفع وكشوف الصيانة وطلبات التحويل، ثم احفظها وعدّلها واطبعها مع مرفقاتها دون تغيير أي تفصيل في القالب الأصلي.</p>
+          <p>اكتب مباشرة على مستندات القبض والصرف والدفع وكشوف الصيانة وطلبات التحويل، وأدر القروض والتسديدات من صفحة مستقلة مع الصلاحيات.</p>
         </div>
       </section>
     </main>`;
@@ -246,18 +284,21 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
   const typeLinks = state.types.map(type => `
     <a class="nav-item ${active === type.code ? 'active' : ''}" href="#/documents/${type.code}" title="${escapeHtml(type.name_ar)}">${icon('file')}<span>${escapeHtml(type.name_ar)}</span><span class="nav-badge">${state.counts[type.code] ?? ''}</span></a>
   `).join('');
+  const financeLinks = canViewPage('loans') ? `
+    <div class="nav-label">المالية</div>
+    <a class="nav-item ${activePath('/loans')}" href="#/loans" title="قروض">${icon('loan')}<span>قروض</span></a>` : '';
   root.innerHTML = `
     <div class="app-shell ${state.sidebarCollapsed ? 'sidebar-collapsed' : ''}" id="app-shell">
       <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-head">
-          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.10</span></div></div>
+          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.14</span></div></div>
           <button id="sidebar-close" class="btn btn-icon btn-link sidebar-close" aria-label="إغلاق القائمة">${icon('close')}</button>
         </div>
         <nav class="sidebar-nav">
           ${canViewPage('dashboard') ? `<a class="nav-item ${activePath('/dashboard')}" href="#/dashboard" title="الداشبورد">${icon('dashboard')}<span>الداشبورد</span></a>` : ''}
           <div class="nav-label">النماذج</div>
-          ${typeLinks}${adminLinks}
+          ${typeLinks}${financeLinks}${adminLinks}
         </nav>
         <div class="sidebar-footer">
           <div class="user-chip"><div class="avatar">${escapeHtml(initials(user.full_name))}</div><div class="user-chip-copy"><strong>${escapeHtml(user.full_name || '')}</strong><span>${escapeHtml(roleLabel(user.role))}</span></div><button id="logout-btn" class="btn btn-icon btn-link" title="تسجيل الخروج">${icon('logout')}</button></div>
@@ -324,28 +365,124 @@ async function ensureTypes() {
 async function renderDashboard() {
   pageLoading('الداشبورد');
   const data = await api('/api/dashboard');
+  const loans = canViewPage('loans') ? await api('/api/loans') : [];
   state.counts = Object.fromEntries(data.types.map(t => [t.code, t.count]));
+
   const weekly = data.weekly_activity || [];
   const maxActivity = Math.max(1, ...weekly.map(item => item.count));
   const activityBars = weekly.map(item => `<div class="activity-column" title="${escapeHtml(item.date)}: ${item.count}"><div class="activity-value">${item.count}</div><div class="activity-track"><span style="height:${Math.max(5, Math.round(item.count / maxActivity * 100))}%"></span></div><small>${escapeHtml(item.label)}</small></div>`).join('');
-  const typeCards = data.types.map(type => `<a class="type-overview-card" href="#/documents/${type.code}"><div class="type-overview-icon">${icon('file')}</div><div class="type-overview-copy"><strong>${escapeHtml(type.name_ar)}</strong><span>${type.saved_count || 0} محفوظ · ${type.draft_count || 0} مسودة</span></div><div class="type-overview-count">${type.count}</div>${icon('chevron')}</a>`).join('');
-  const recentRows = data.recent.length ? data.recent.map(doc => `<tr><td class="mono"><strong>${escapeHtml(doc.document_number)}</strong></td><td>${escapeHtml(doc.type.name_ar)}</td><td>${escapeHtml(doc.fields[doc.type.config.list_primary_field] || '-')}</td><td>${statusBadge(doc.status)}</td><td>${formatDate(doc.updated_at, true)}</td><td>${documentActionButtons(doc)}</td></tr>`).join('') : `<tr><td colspan="6"><div class="empty">لا توجد مستندات حتى الآن.</div></td></tr>`;
-  const createAction = state.user.role !== 'viewer' && state.types.length ? `<button id="dashboard-create" class="btn btn-primary">${icon('plus')} إنشاء مستند</button>` : '';
+
+  const typeCards = data.types.map(type => {
+    const saved = Number(type.saved_count || 0);
+    const draft = Number(type.draft_count || 0);
+    const count = Number(type.count || 0);
+    const savedPercent = count ? Math.round(saved / count * 100) : 0;
+    const typeIcon = type.code === 'TR' ? icon('transfer') : icon('file');
+    return `<a class="type-overview-card premium" href="#/documents/${type.code}">
+      <div class="type-overview-icon ${type.code === 'TR' ? 'transfer' : ''}">${typeIcon}</div>
+      <div class="type-overview-copy"><strong>${escapeHtml(type.name_ar)}</strong><span>${saved} محفوظ · ${draft} مسودة</span><div class="type-overview-progress"><span style="width:${savedPercent}%"></span></div></div>
+      <div class="type-overview-count"><strong>${count}</strong><small>${savedPercent}% مكتمل</small></div>${icon('chevron')}
+    </a>`;
+  }).join('');
+
+  const recentRows = data.recent.length ? data.recent.map(doc => `<tr><td class="mono"><strong>${escapeHtml(doc.document_number)}</strong></td><td><span class="dashboard-type-cell">${doc.type.code === 'TR' ? icon('transfer') : icon('file')} ${escapeHtml(doc.type.name_ar)}</span></td><td>${escapeHtml(doc.fields[doc.type.config.list_primary_field] || '-')}</td><td>${statusBadge(doc.status)}</td><td>${formatDate(doc.updated_at, true)}</td><td>${documentActionButtons(doc)}</td></tr>`).join('') : `<tr><td colspan="6"><div class="empty">لا توجد مستندات حتى الآن.</div></td></tr>`;
+
+  const activeLoans = loans.filter(item => item.status === 'active');
+  const paidLoans = loans.filter(item => item.status === 'paid');
+  const remainingLoans = activeLoans.reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0);
+  const totalLoanPayments = loans.reduce((sum, item) => sum + Number(item.payment_count || 0), 0);
+  const loanSnapshot = canViewPage('loans') ? `<section class="dashboard-finance-panel">
+    <div class="dashboard-finance-copy"><span class="eyebrow">المالية</span><h2>ملخص القروض</h2><p>أرقام مباشرة من صفحة القروض والتسديدات.</p></div>
+    <div class="dashboard-finance-metrics"><div><span>قروض قائمة</span><strong>${activeLoans.length}</strong></div><div><span>المتبقي</span><strong>${formatMoney(remainingLoans)}</strong></div><div><span>مسددة بالكامل</span><strong>${paidLoans.length}</strong></div><div><span>عمليات تسديد</span><strong>${totalLoanPayments}</strong></div></div>
+    <a class="btn btn-secondary" href="#/loans">فتح القروض ${icon('chevron')}</a>
+  </section>` : '';
+
+  const draftTypes = data.types.filter(type => Number(type.draft_count || 0) > 0);
+  const draftAttention = draftTypes.length ? `<section class="dashboard-section"><div class="section-heading"><div><h2>تحتاج متابعة</h2><p>الأقسام التي تحتوي على مسودات غير مكتملة.</p></div></div><div class="dashboard-attention-grid">${draftTypes.map(type => `<a href="#/documents/${type.code}" class="attention-card"><div class="attention-icon">${icon('draft')}</div><div><strong>${escapeHtml(type.name_ar)}</strong><span>${type.draft_count} مسودة بانتظار الاستكمال</span></div>${icon('chevron')}</a>`).join('')}</div></section>` : '';
+
+  const transferType = data.types.find(type => type.code === 'TR');
+  const transferMetric = transferType ? `<article class="dashboard-kpi transfer-kpi"><div class="dashboard-kpi-top"><span>طلبات التحويل</span><div class="dashboard-kpi-icon">${icon('transfer')}</div></div><strong>${transferType.count || 0}</strong><small>${transferType.saved_count || 0} محفوظ · ${transferType.draft_count || 0} مسودة</small></article>` : '';
+  const createAction = state.user.role !== 'viewer' && state.types.length ? `<button id="dashboard-create" class="btn btn-primary btn-lg">${icon('plus')} إنشاء مستند</button>` : '';
+
   shell('الداشبورد', `
-    <div class="page-header dashboard-header"><div><span class="eyebrow">مساحة العمل</span><h1>مرحباً، ${escapeHtml(state.user.full_name)}</h1><p>نظرة واضحة على المستندات وحالة العمل اليوم.</p></div><div class="page-actions">${createAction}</div></div>
-    <div class="cards dashboard-cards">
-      <article class="stat-card"><div class="stat-top"><span>جميع المستندات</span><div class="stat-icon">${icon('dashboard')}</div></div><strong>${data.total_documents}</strong><span>${data.today_documents} أُنشئت اليوم</span></article>
-      <article class="stat-card"><div class="stat-top"><span>المستندات المحفوظة</span><div class="stat-icon">${icon('save')}</div></div><strong>${data.saved_documents || 0}</strong><span>جاهزة للمشاهدة والطباعة</span></article>
-      <article class="stat-card"><div class="stat-top"><span>المسودات</span><div class="stat-icon warning">${icon('draft')}</div></div><strong>${data.draft_documents || 0}</strong><span>تحتاج إلى استكمال</span></article>
-      <article class="stat-card"><div class="stat-top"><span>المرفقات</span><div class="stat-icon accent">${icon('attachment')}</div></div><strong>${data.total_attachments}</strong><span>${data.printed_total || 0} عملية طباعة</span></article>
+    <section class="dashboard-hero">
+      <div class="dashboard-hero-copy"><span class="dashboard-kicker">لوحة التشغيل</span><h1>${dashboardGreeting()}، ${escapeHtml(state.user.full_name)}</h1><p>كل المستندات، التحويلات، المسودات والنشاط اليومي في مكان واحد.</p><div class="dashboard-hero-meta"><span>${icon('clock')} ${escapeHtml(dashboardDateLabel())}</span><span class="badge badge-${escapeHtml(state.user.role)}">${escapeHtml(roleLabel(state.user.role))}</span></div></div>
+      <div class="dashboard-hero-side"><div class="dashboard-today-card"><span>مستندات اليوم</span><strong>${data.today_documents}</strong><small>من أصل ${data.total_documents} مستند</small></div>${createAction}</div>
+    </section>
+
+    <div class="dashboard-kpi-grid">
+      <article class="dashboard-kpi"><div class="dashboard-kpi-top"><span>جميع المستندات</span><div class="dashboard-kpi-icon">${icon('dashboard')}</div></div><strong>${data.total_documents}</strong><small>${data.today_documents} أُنشئت اليوم</small></article>
+      <article class="dashboard-kpi success"><div class="dashboard-kpi-top"><span>المحفوظة</span><div class="dashboard-kpi-icon">${icon('save')}</div></div><strong>${data.saved_documents || 0}</strong><small>جاهزة للمشاهدة والطباعة</small></article>
+      <article class="dashboard-kpi warning"><div class="dashboard-kpi-top"><span>المسودات</span><div class="dashboard-kpi-icon">${icon('draft')}</div></div><strong>${data.draft_documents || 0}</strong><small>تحتاج إلى استكمال</small></article>
+      ${transferMetric || `<article class="dashboard-kpi"><div class="dashboard-kpi-top"><span>المرفقات</span><div class="dashboard-kpi-icon">${icon('attachment')}</div></div><strong>${data.total_attachments}</strong><small>${data.printed_total || 0} عملية طباعة</small></article>`}
     </div>
-    <section class="dashboard-section"><div class="section-heading"><div><h2>الأقسام</h2><p>ادخل إلى كل نموذج وجميع المستندات المحفوظة فيه.</p></div></div><div class="type-overview-grid">${typeCards}</div></section>
-    <div class="dashboard-grid dashboard-grid-balanced">
-      <div class="panel"><div class="panel-head"><div><h2>آخر المستندات</h2><p>آخر التعديلات في جميع الأقسام.</p></div></div><div class="table-wrap"><table><thead><tr><th>الرقم</th><th>النموذج</th><th>الاسم/الجهة</th><th>الحالة</th><th>آخر تعديل</th><th>الإجراءات</th></tr></thead><tbody>${recentRows}</tbody></table></div></div>
-      <div class="panel activity-panel"><div class="panel-head"><div><h2>نشاط آخر 7 أيام</h2><p>عدد المستندات الجديدة يومياً.</p></div><div class="stat-icon">${icon('chart')}</div></div><div class="panel-body"><div class="activity-chart">${activityBars}</div><div class="activity-summary"><span>اليوم</span><strong>${data.today_documents}</strong><span>إجمالي الطباعة</span><strong>${data.printed_total || 0}</strong></div></div></div>
-    </div>`);
+
+    ${loanSnapshot}
+
+    <section class="dashboard-section"><div class="section-heading"><div><h2>الأقسام</h2><p>حالة كل نموذج ونسبة المستندات المحفوظة داخله.</p></div><span class="section-count">${data.types.length} أقسام</span></div><div class="type-overview-grid">${typeCards}</div></section>
+
+    <div class="dashboard-grid dashboard-grid-premium">
+      <div class="panel recent-documents-panel"><div class="panel-head"><div><h2>آخر المستندات</h2><p>آخر التعديلات في جميع الأقسام المسموح لك بها.</p></div><span class="panel-head-icon">${icon('clock')}</span></div><div class="table-wrap"><table><thead><tr><th>الرقم</th><th>النموذج</th><th>الاسم/الجهة</th><th>الحالة</th><th>آخر تعديل</th><th>الإجراءات</th></tr></thead><tbody>${recentRows}</tbody></table></div></div>
+      <div class="panel activity-panel premium"><div class="panel-head"><div><h2>نشاط آخر 7 أيام</h2><p>عدد المستندات الجديدة يومياً.</p></div><div class="stat-icon">${icon('chart')}</div></div><div class="panel-body"><div class="activity-chart">${activityBars}</div><div class="activity-summary"><span>اليوم</span><strong>${data.today_documents}</strong><span>إجمالي الطباعة</span><strong>${data.printed_total || 0}</strong><span>المرفقات</span><strong>${data.total_attachments || 0}</strong></div></div></div>
+    </div>
+    ${draftAttention}`);
   document.getElementById('dashboard-create')?.addEventListener('click', openCreateMenu);
   wireDocumentActions(root);
+}
+
+function renderTransferList(type, documents) {
+  const savedCount = documents.filter(item => item.status === 'saved').length;
+  const draftCount = documents.length - savedCount;
+  const numericAmounts = documents.map(item => parseAmountNumber(item.fields.amount)).filter(value => value > 0);
+  const amountTotal = numericAmounts.reduce((sum, value) => sum + value, 0);
+  const departments = [...new Set(documents.map(item => String(item.fields.department || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'ar'));
+
+  const renderRows = items => {
+    const body = document.getElementById('document-rows');
+    if (!body) return;
+    body.innerHTML = items.length ? items.map(doc => {
+      const currency = String(doc.fields.currency || '').trim();
+      const entity = String(doc.fields.transfer_entity || '').trim();
+      return `<tr class="transfer-row-item"><td class="mono"><strong>${escapeHtml(doc.document_number)}</strong><span class="table-subtext">${formatDate(doc.created_at)}</span></td><td>${escapeHtml(doc.fields.date || '-')}</td><td><div class="transfer-table-primary"><strong>${escapeHtml(doc.fields.pay_to || '-')}</strong><span>${escapeHtml(doc.fields.purpose || '').split('\n')[0] || 'بدون وصف'}</span></div></td><td>${entity ? `<span class="transfer-entity-pill">${icon('transfer')} ${escapeHtml(entity)}</span>` : '<span class="muted-dash">-</span>'}</td><td>${escapeHtml(doc.fields.department || '-')}</td><td><div class="transfer-money"><strong>${displayDocumentAmount(doc.fields.amount)}</strong>${currency ? `<span>${escapeHtml(currency)}</span>` : ''}</div></td><td>${statusBadge(doc.status)}</td><td>${escapeHtml(doc.created_by_name)}</td><td>${documentActionButtons(doc)}</td></tr>`;
+    }).join('') : `<tr><td colspan="9"><div class="empty transfer-empty"><div class="stat-icon">${icon('transfer')}</div><strong>لا توجد طلبات تحويل</strong><p>غيّر البحث أو الفلتر، أو أنشئ طلب تحويل جديد.</p></div></td></tr>`;
+    wireDocumentActions(body);
+  };
+
+  const createAction = state.user.role !== 'viewer' ? `<button class="btn btn-primary btn-lg" id="new-doc">${icon('plus')} طلب تحويل جديد</button>` : '';
+  const departmentOptions = departments.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
+  shell(type.name_ar, `
+    <section class="transfer-page-hero">
+      <div class="transfer-page-title"><div class="transfer-page-seal">${icon('transfer')}</div><div><span class="eyebrow">إدارة التحويلات</span><h1>تحويل</h1><p>إنشاء ومتابعة طلبات التحويل مع عرض الجهة والمبلغ والحالة بشكل واضح.</p></div></div>
+      <div class="transfer-page-actions">${createAction}</div>
+    </section>
+
+    <div class="transfer-summary-grid">
+      <article class="transfer-summary-card"><span>كل الطلبات</span><strong>${documents.length}</strong><small>طلب تحويل</small></article>
+      <article class="transfer-summary-card success"><span>محفوظ</span><strong>${savedCount}</strong><small>جاهز للطباعة</small></article>
+      <article class="transfer-summary-card warning"><span>مسودة</span><strong>${draftCount}</strong><small>بانتظار الاستكمال</small></article>
+      <article class="transfer-summary-card amount"><span>إجمالي المبالغ الرقمية</span><strong>${formatMoney(amountTotal)}</strong><small>${numericAmounts.length} طلب يحتوي مبلغاً رقمياً</small></article>
+    </div>
+
+    <section class="panel transfer-list-panel">
+      <div class="transfer-toolbar"><div><h2>طلبات التحويل</h2><p>ابحث بالرقم، الاسم، الجهة أو القسم.</p></div><div class="transfer-filters"><div class="search-box">${icon('search')}<input id="document-search" class="control" placeholder="بحث في طلبات التحويل..."></div><select id="document-status-filter" class="control compact"><option value="">كل الحالات</option><option value="saved">محفوظ</option><option value="draft">مسودة</option></select>${departments.length ? `<select id="transfer-department-filter" class="control compact"><option value="">كل الأقسام</option>${departmentOptions}</select>` : ''}<button id="refresh-list" class="btn btn-secondary btn-icon" title="تحديث">${icon('refresh')}</button></div></div>
+      <div class="table-wrap transfer-table-wrap"><table class="transfer-table"><thead><tr><th>رقم الطلب</th><th>التاريخ</th><th>الدفع إلى / الغرض</th><th>جهة التحويل</th><th>القسم</th><th>المبلغ</th><th>الحالة</th><th>المنشئ</th><th>الإجراءات</th></tr></thead><tbody id="document-rows"></tbody></table></div>
+    </section>`, {active:type.code});
+
+  const applyFilters = () => {
+    const term = document.getElementById('document-search').value.trim().toLowerCase();
+    const status = document.getElementById('document-status-filter').value;
+    const department = document.getElementById('transfer-department-filter')?.value || '';
+    renderRows(documents.filter(doc => {
+      const haystack = `${doc.document_number} ${doc.fields.pay_to || ''} ${doc.fields.transfer_entity || ''} ${doc.fields.department || ''} ${doc.fields.purpose || ''} ${doc.fields.amount || ''} ${doc.created_by_name || ''}`.toLowerCase();
+      return (!term || haystack.includes(term)) && (!status || doc.status === status) && (!department || doc.fields.department === department);
+    }));
+  };
+  document.getElementById('new-doc')?.addEventListener('click', () => navigate(`/documents/new/${type.code}`));
+  document.getElementById('refresh-list').addEventListener('click', () => renderDocumentList(type.code));
+  document.getElementById('document-search').addEventListener('input', applyFilters);
+  document.getElementById('document-status-filter').addEventListener('change', applyFilters);
+  document.getElementById('transfer-department-filter')?.addEventListener('change', applyFilters);
+  renderRows(documents);
 }
 
 async function renderDocumentList(code) {
@@ -354,6 +491,7 @@ async function renderDocumentList(code) {
   pageLoading(type.name_ar);
   const documents = await api(`/api/documents?type_code=${encodeURIComponent(code)}&limit=500`);
   state.counts[code] = documents.length;
+  if (code === 'TR') return renderTransferList(type, documents);
   const savedCount = documents.filter(item => item.status === 'saved').length;
   const draftCount = documents.length - savedCount;
   const renderRows = items => {
@@ -804,13 +942,22 @@ async function renderDocumentEditor(id, mode) {
   const useHtmlTemplate = doc.type.config.template_engine === 'html' && Boolean(doc.type.config.html_template);
   const fields = useHtmlTemplate ? '' : doc.type.config.fields.map(field => fieldHtml(field, doc.fields[field.key], viewOnly)).join('');
   const templateMarkup = useHtmlTemplate
-    ? `<iframe id="template-frame" class="html-template-frame" src="/form-templates/${encodeURIComponent(doc.type.config.html_template)}?v=3.3.10" title="${escapeHtml(doc.type.name_ar)}"></iframe>`
+    ? `<iframe id="template-frame" class="html-template-frame" src="/form-templates/${encodeURIComponent(doc.type.config.html_template)}?v=3.3.14" title="${escapeHtml(doc.type.name_ar)}"></iframe>`
     : `<img class="template-bg" src="${doc.type.image_url}" alt="${escapeHtml(doc.type.name_ar)}">${fields}`;
   const attachments = attachmentsHtml(doc.attachments || [], viewOnly);
   const primaryAction = viewOnly ? (state.user.role !== 'viewer' ? `<button id="edit-document" class="btn btn-primary">${icon('edit')} تعديل</button>` : '') : `<select id="document-status" class="control compact status-control"><option value="saved" ${doc.status === 'saved' ? 'selected' : ''}>محفوظ</option><option value="draft" ${doc.status === 'draft' ? 'selected' : ''}>مسودة</option></select><button id="save-document" class="btn btn-primary">${icon('save')} حفظ</button>`;
   const deleteAction = state.user.role === 'admin' ? `<button type="button" class="btn btn-danger-soft" id="delete-document" title="حذف المستند نهائياً">${icon('trash')}<span>حذف نهائي</span></button>` : '';
+  const isTransferDocument = doc.type.code === 'TR';
+  const transferMeta = isTransferDocument ? [
+    doc.fields.date ? `<span>${icon('clock')} ${escapeHtml(doc.fields.date)}</span>` : '',
+    doc.fields.transfer_entity ? `<span>${icon('transfer')} ${escapeHtml(doc.fields.transfer_entity)}</span>` : '',
+    doc.fields.amount ? `<span>${icon('wallet')} ${displayDocumentAmount(doc.fields.amount)} ${escapeHtml(doc.fields.currency || '')}</span>` : '',
+  ].filter(Boolean).join('') : '';
+  const editorHeader = isTransferDocument
+    ? `<div class="page-header document-header transfer-document-header"><div class="transfer-document-heading"><div class="transfer-document-icon">${icon('transfer')}</div><div><span class="eyebrow">طلب تحويل</span><h1>${escapeHtml(doc.document_number)}</h1><p>واجهة عمل محسّنة للطلب مع بقاء نموذج التحويل الأصلي دون أي تغيير.</p>${transferMeta ? `<div class="transfer-document-meta">${transferMeta}</div>` : ''}</div></div><div class="page-actions"><a class="btn btn-secondary" href="#/documents/${doc.type.code}">${icon('chevron')} رجوع للتحويلات</a></div></div>`
+    : `<div class="page-header document-header"><div><span class="eyebrow">${escapeHtml(doc.type.name_ar)}</span><h1>${escapeHtml(doc.document_number)}</h1><p>الكتابة في طبقة مستقلة، والقالب الرسمي يبقى دون تعديل.</p></div><div class="page-actions"><a class="btn btn-secondary" href="#/documents/${doc.type.code}">${icon('chevron')} رجوع للقائمة</a></div></div>`;
   shell(`${viewOnly ? 'عرض' : 'تعديل'} ${doc.type.name_ar}`, `
-    <div class="page-header document-header"><div><span class="eyebrow">${escapeHtml(doc.type.name_ar)}</span><h1>${escapeHtml(doc.document_number)}</h1><p>الكتابة في طبقة مستقلة، والقالب الرسمي يبقى دون تعديل.</p></div><div class="page-actions"><a class="btn btn-secondary" href="#/documents/${doc.type.code}">${icon('chevron')} رجوع للقائمة</a></div></div>
+    ${editorHeader}
     <div class="document-commandbar"><div class="commandbar-primary">${primaryAction}<button id="print-document" class="btn btn-secondary">${icon('print')} طباعة</button></div><div class="commandbar-secondary"><div class="template-zoom-controls" aria-label="تكبير وتصغير النموذج" dir="ltr"><button type="button" class="template-zoom-button" id="template-zoom-out" title="تصغير النموذج" aria-label="تصغير النموذج">−</button><span class="template-zoom-value" id="template-zoom-value">100%</span><button type="button" class="template-zoom-button" id="template-zoom-in" title="تكبير النموذج" aria-label="تكبير النموذج">+</button><button type="button" class="template-zoom-fit active" id="template-zoom-fit" title="إظهار النموذج كاملاً داخل الشاشة">ملاءمة</button></div>${!viewOnly ? `<label class="field-guide-toggle"><input id="field-guide" type="checkbox" checked><span>إظهار حدود الكتابة</span></label>` : ''}${deleteAction}</div></div>
     <div class="editor-grid"><div class="editor-stage"><div class="template-zoom-canvas" id="template-zoom-canvas"><div id="template-page" class="template-page ${useHtmlTemplate ? 'html-template-host' : ''} ${viewOnly ? 'view-only clean' : ''}">${templateMarkup}</div></div></div><aside class="editor-side">
       <section class="panel"><div class="panel-head"><h3>معلومات المستند</h3>${statusBadge(doc.status)}</div><div class="panel-body"><div class="lock-note">${icon('lock')} القالب الرسمي محفوظ كما هو، ولا يتم تعديل أي صورة أو خط أو نقطة داخله.</div><div class="meta-list" style="margin-top:14px"><div class="meta-row"><span>أنشأه</span><strong>${escapeHtml(doc.created_by_name)}</strong></div><div class="meta-row"><span>آخر تعديل</span><strong>${escapeHtml(doc.updated_by_name)}</strong></div><div class="meta-row"><span>تاريخ الإنشاء</span><strong>${formatDate(doc.created_at, true)}</strong></div><div class="meta-row"><span>الإصدار</span><strong>${doc.revision}</strong></div><div class="meta-row"><span>مرات الطباعة</span><strong>${doc.print_count}</strong></div></div></div></section>
@@ -1012,6 +1159,227 @@ function confirmDeleteDocument(id, returnCode) {
   });
 }
 
+
+function loanStatusBadge(loan) {
+  return loan.status === 'paid'
+    ? '<span class="badge badge-saved">مسدد بالكامل</span>'
+    : '<span class="badge badge-draft">قائم</span>';
+}
+
+function loanActionButtons(loan) {
+  const canEdit = state.user.role !== 'viewer';
+  const pay = canEdit && loan.status !== 'paid' ? `<button type="button" class="btn btn-primary row-action" data-loan-action="pay" data-id="${loan.id}">${icon('check')}<span>تسديد</span></button>` : '';
+  const edit = canEdit ? `<button type="button" class="btn btn-secondary row-action" data-loan-action="edit" data-id="${loan.id}">${icon('edit')}<span>تعديل</span></button>` : '';
+  const report = `<button type="button" class="btn btn-secondary row-action" data-loan-action="report" data-id="${loan.id}">${icon('print')}<span>تقرير</span></button>`;
+  const remove = state.user.role === 'admin' ? `<button type="button" class="btn btn-danger-soft row-action" data-loan-action="delete" data-id="${loan.id}">${icon('trash')}<span>حذف نهائي</span></button>` : '';
+  return `<div class="row-actions"><button type="button" class="btn btn-secondary row-action" data-loan-action="view" data-id="${loan.id}">${icon('eye')}<span>مشاهدة</span></button>${report}${pay}${edit}${remove}</div>`;
+}
+
+function wireLoanActions(loans, onChanged = renderLoans) {
+  root.querySelectorAll('[data-loan-action]').forEach(button => button.addEventListener('click', async () => {
+    const id = Number(button.dataset.id);
+    let loan = loans?.find(item => item.id === id);
+    if (!loan) {
+      try { loan = await api(`/api/loans/${id}`); } catch (err) { return toast(err.message, 'error'); }
+    }
+    const action = button.dataset.loanAction;
+    if (action === 'view') return navigate(`/loans/${id}`);
+    if (action === 'report') return openLoanReport(loan);
+    if (action === 'edit') return openLoanForm(loan, onChanged);
+    if (action === 'pay') return openLoanPaymentModal(loan, onChanged);
+    if (action === 'delete') return openLoanDeleteModal(loan, onChanged);
+  }));
+}
+
+
+async function openLoanReport(loan) {
+  const reportWindow = window.open('', '_blank');
+  if (!reportWindow) return toast('اسمح للنظام بفتح نافذة التقرير ثم حاول مرة أخرى', 'error');
+  try { reportWindow.opener = null; } catch (_) {}
+  reportWindow.document.open();
+  reportWindow.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير القرض</title></head><body style="font-family:Arial,Tahoma,sans-serif;padding:32px;direction:rtl">جارٍ تجهيز التقرير...</body></html>`);
+  reportWindow.document.close();
+  try {
+    const full = loan?.payments ? loan : await api(`/api/loans/${loan.id}`);
+    const payments = full.payments || [];
+    const paidAmount = Number(full.paid_amount || 0);
+    const statusText = full.status === 'paid' ? 'مسدد بالكامل' : 'قائم';
+    const rows = payments.map((p, index) => `<tr><td>${payments.length-index}</td><td>${formatMoney(p.amount)}</td><td>${formatMoney(p.remaining_amount_after)}</td><td>${p.months_remaining_after}</td><td>${escapeHtml(p.paid_by_name || '-')}</td><td>${formatDate(p.paid_at,true)}</td><td>${escapeHtml(p.notes || '-')}</td></tr>`).join('');
+    const generatedAt = new Date().toLocaleString('ar-IQ');
+    reportWindow.document.open();
+    reportWindow.document.write(`<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>تقرير قرض - ${escapeHtml(full.borrower_name)}</title>
+<style>
+@page{size:A4 portrait;margin:14mm}*{box-sizing:border-box}body{margin:0;color:#14231d;background:#fff;font-family:Arial,Tahoma,sans-serif;direction:rtl}.report{max-width:190mm;margin:0 auto}.top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:3px solid #0c6b4e;padding-bottom:14px;margin-bottom:18px}.top h1{margin:0 0 6px;font-size:25px}.top p{margin:0;color:#66736d;font-size:13px}.status{display:inline-flex;border:1px solid #bcd6cd;border-radius:999px;padding:7px 13px;font-weight:800;color:#0c6b4e;background:#eef7f3}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0 22px}.card{border:1px solid #d9dedb;border-radius:12px;padding:13px;min-height:76px}.card span{display:block;color:#66736d;font-size:12px;margin-bottom:7px}.card strong{font-size:18px}.card.em{background:#eef7f3;border-color:#bcd6cd}.card.em strong{color:#0c6b4e}h2{font-size:18px;margin:24px 0 10px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #d9dedb;padding:8px 7px;text-align:right;vertical-align:top}th{background:#f4f2ea;font-weight:800}.meta{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:16px;padding-top:12px;border-top:1px solid #d9dedb;color:#66736d;font-size:11px}.meta strong{color:#14231d}.actions{display:flex;gap:8px;margin:0 0 18px}.actions button{border:0;border-radius:8px;padding:9px 15px;font-weight:800;cursor:pointer}.print{background:#0c6b4e;color:#fff}.close{background:#eee;color:#222}.empty{padding:18px;text-align:center;color:#66736d}@media print{.actions{display:none}.report{max-width:none}.top{margin-top:0}}@media(max-width:720px){body{padding:14px}.grid{grid-template-columns:1fr 1fr}.top{flex-direction:column}}@media(max-width:460px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="report">
+  <div class="actions"><button class="print" onclick="window.print()">طباعة / حفظ PDF</button><button class="close" onclick="window.close()">إغلاق</button></div>
+  <header class="top"><div><p>نظام المستندات — تقرير القروض</p><h1>${escapeHtml(full.borrower_name)}</h1><p>تقرير مالي يوضح القرض وجميع عمليات التسديد حتى تاريخ إنشاء التقرير.</p></div><span class="status">${statusText}</span></header>
+  <section class="grid">
+    <div class="card"><span>مبلغ القرض</span><strong>${formatMoney(full.principal_amount)}</strong></div>
+    <div class="card"><span>إجمالي المسدد</span><strong>${formatMoney(paidAmount)}</strong></div>
+    <div class="card em"><span>المبلغ المتبقي</span><strong>${formatMoney(full.remaining_amount)}</strong></div>
+    <div class="card"><span>عدد الأشهر</span><strong>${full.months_total}</strong></div>
+    <div class="card em"><span>الأشهر الباقية</span><strong>${full.remaining_months}</strong></div>
+    <div class="card"><span>المبلغ المحدد (الحد الأدنى)</span><strong>${formatMoney(full.minimum_payment)}</strong></div>
+  </section>
+  <h2>سجل التسديدات</h2>
+  <table><thead><tr><th>#</th><th>مبلغ التسديد</th><th>المبلغ الباقي</th><th>الأشهر الباقية</th><th>المستخدم</th><th>التاريخ</th><th>ملاحظة</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="empty">لم يتم تسجيل أي تسديد بعد.</td></tr>`}</tbody></table>
+  <footer class="meta"><span>تاريخ إنشاء القرض: <strong>${formatDate(full.created_at,true)}</strong></span><span>آخر تعديل: <strong>${formatDate(full.updated_at,true)}</strong></span><span>أنشأه: <strong>${escapeHtml(full.created_by_name || '-')}</strong></span><span>تاريخ التقرير: <strong>${escapeHtml(generatedAt)}</strong></span></footer>
+</main>
+</body></html>`);
+    reportWindow.document.close();
+  } catch (err) {
+    reportWindow.document.body.innerHTML = `<div style="font-family:Arial,Tahoma,sans-serif;direction:rtl;padding:30px;color:#9b2c2c"><h2>تعذر إنشاء التقرير</h2><p>${escapeHtml(err.message || 'خطأ غير معروف')}</p></div>`;
+  }
+}
+
+async function renderLoans() {
+  pageLoading('قروض');
+  const loans = await api('/api/loans');
+  const active = loans.filter(item => item.status === 'active');
+  const paid = loans.filter(item => item.status === 'paid');
+  const remainingTotal = active.reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0);
+  const canEdit = state.user.role !== 'viewer';
+  const addPanel = canEdit ? `
+    <section class="panel loan-create-panel">
+      <div class="panel-head"><div><h3>إضافة قرض</h3><p>هذه صفحة بيانات مباشرة وليست فاتورة أو نموذج A4.</p></div>${icon('loan')}</div>
+      <form id="loan-create-form" class="loan-inline-form">
+        <div class="form-row"><label>الاسم الثلاثي</label><input class="control" name="borrower_name" required minlength="3" maxlength="160" placeholder="أدخل الاسم الثلاثي"></div>
+        <div class="form-row"><label>المبلغ</label><input class="control" name="principal_amount" type="number" min="0.01" step="0.01" required placeholder="0.00"></div>
+        <div class="form-row"><label>عدد الأشهر</label><input class="control" name="months_total" type="number" min="1" max="600" step="1" required placeholder="مثال: 12"></div>
+        <div class="form-row"><label>المبلغ المحدد</label><input class="control" name="minimum_payment" type="number" min="0.01" step="0.01" required placeholder="الحد الأدنى لكل تسديد"><span class="help">لا يمكن تسجيل تسديد أقل من هذا المبلغ، إلا إذا كان المبلغ المتبقي النهائي أقل منه.</span></div>
+        <div class="loan-inline-actions"><div id="loan-create-error" class="error-text"></div><button id="loan-create-save" class="btn btn-primary" type="submit">${icon('plus')} إضافة</button></div>
+      </form>
+    </section>` : '';
+  shell('قروض', `
+    <div class="page-header"><div><span class="eyebrow">الإدارة المالية</span><h1>قروض</h1><p>إضافة الاسم الثلاثي والمبلغ وعدد الأشهر والمبلغ المحدد، ثم متابعة التسديد والمتبقي مباشرة.</p></div></div>
+    ${addPanel}
+    <div class="list-summary"><div class="summary-pill"><strong>${loans.length}</strong><span>كل القروض</span></div><div class="summary-pill"><strong>${active.length}</strong><span>قرض قائم</span></div><div class="summary-pill"><strong>${paid.length}</strong><span>مسدد بالكامل</span></div><div class="summary-pill"><strong>${formatMoney(remainingTotal)}</strong><span>إجمالي المتبقي</span></div></div>
+    <div class="panel"><div class="panel-head document-toolbar"><div class="filters"><div class="search-box">${icon('search')}<input id="loan-search" class="control" placeholder="بحث بالاسم الثلاثي..."></div><select id="loan-status" class="control compact"><option value="">كل الحالات</option><option value="active">قائم</option><option value="paid">مسدد بالكامل</option></select></div></div>
+      <div class="table-wrap"><table><thead><tr><th>الاسم الثلاثي</th><th>المبلغ</th><th>عدد الأشهر</th><th>المبلغ المحدد</th><th>المسدد</th><th>المبلغ المتبقي</th><th>الأشهر الباقية</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="loan-rows"></tbody></table></div></div>`);
+
+  const draw = () => {
+    const term = document.getElementById('loan-search').value.trim().toLowerCase();
+    const status = document.getElementById('loan-status').value;
+    const filtered = loans.filter(loan => (!term || loan.borrower_name.toLowerCase().includes(term)) && (!status || loan.status === status));
+    const body = document.getElementById('loan-rows');
+    body.innerHTML = filtered.map(loan => `<tr><td><strong>${escapeHtml(loan.borrower_name)}</strong><span class="table-subtext">${loan.payment_count} عملية تسديد</span></td><td class="mono">${formatMoney(loan.principal_amount)}</td><td>${loan.months_total}</td><td class="mono">${formatMoney(loan.minimum_payment)}</td><td class="mono">${formatMoney(loan.paid_amount)}</td><td><strong class="mono">${formatMoney(loan.remaining_amount)}</strong></td><td><span class="loan-months">${loan.remaining_months}</span></td><td>${loanStatusBadge(loan)}</td><td>${loanActionButtons(loan)}</td></tr>`).join('') || `<tr><td colspan="9"><div class="empty"><div class="stat-icon">${icon('loan')}</div><h3>لا توجد قروض</h3><p>أضف أول قرض من الحقول الموجودة أعلى الصفحة.</p></div></td></tr>`;
+    wireLoanActions(filtered);
+  };
+  document.getElementById('loan-search').addEventListener('input', draw);
+  document.getElementById('loan-status').addEventListener('change', draw);
+  const createForm = document.getElementById('loan-create-form');
+  createForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!createForm.reportValidity()) return;
+    const form = new FormData(createForm);
+    const button = document.getElementById('loan-create-save');
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="loader"></span> جارٍ الإضافة';
+    document.getElementById('loan-create-error').textContent = '';
+    try {
+      await api('/api/loans', {method:'POST', body:{
+        borrower_name:form.get('borrower_name'),
+        principal_amount:Number(form.get('principal_amount')),
+        months_total:Number(form.get('months_total')),
+        minimum_payment:Number(form.get('minimum_payment'))
+      }});
+      toast('تمت إضافة القرض', 'success');
+      await renderLoans();
+    } catch (err) {
+      document.getElementById('loan-create-error').textContent = err.message;
+      button.disabled = false;
+      button.innerHTML = original;
+    }
+  });
+  draw();
+}
+
+function openLoanForm(loan = null, onSaved = renderLoans) {
+  const editing = Boolean(loan);
+  const body = `<form id="loan-form" class="form-grid">
+    <div class="form-row"><label>الاسم الثلاثي</label><input class="control" name="borrower_name" required minlength="3" maxlength="160" value="${escapeHtml(loan?.borrower_name || '')}" placeholder="الاسم الثلاثي للمقترض"></div>
+    <div class="form-row"><label>المبلغ</label><input class="control" name="principal_amount" type="number" min="0.01" step="0.01" required value="${escapeHtml(loan?.principal_amount || '')}"></div>
+    <div class="form-row"><label>عدد الأشهر</label><input class="control" name="months_total" type="number" min="1" max="600" step="1" required value="${escapeHtml(loan?.months_total || '')}"><span class="help">كل عملية تسديد تحسب شهراً واحداً، والتسديد الكامل يجعل الأشهر الباقية صفراً.</span></div>
+    <div class="form-row"><label>المبلغ المحدد</label><input class="control" name="minimum_payment" type="number" min="0.01" step="0.01" required value="${escapeHtml(loan?.minimum_payment || '')}"><span class="help">لن يسمح النظام بتسديد مبلغ أقل من هذا الحد، باستثناء الدفعة النهائية إذا كان المتبقي أقل منه.</span></div>
+    ${editing && loan.payment_count ? `<div class="lock-note">تم تسجيل ${loan.payment_count} عملية تسديد بقيمة ${formatMoney(loan.paid_amount)}. لا يمكن تخفيض مبلغ القرض عن المبلغ المسدد أو عدد الأشهر عن عدد عمليات التسديد.</div>` : ''}
+    <div id="loan-form-error" class="error-text"></div>
+  </form>`;
+  showModal(editing ? 'تعديل القرض' : 'إنشاء قرض جديد', body, ['<button id="loan-form-cancel" class="btn btn-secondary">إلغاء</button>', `<button id="loan-form-save" class="btn btn-primary">${icon('save')} ${editing ? 'حفظ التعديل' : 'إنشاء القرض'}</button>`]);
+  document.getElementById('loan-form-cancel').addEventListener('click', closeModal);
+  document.getElementById('loan-form-save').addEventListener('click', async event => {
+    const formEl = document.getElementById('loan-form');
+    if (!formEl.reportValidity()) return;
+    const form = new FormData(formEl);
+    const button = event.currentTarget; const original = button.innerHTML;
+    button.disabled = true; button.innerHTML = '<span class="loader"></span> جارٍ الحفظ';
+    try {
+      const payload = {borrower_name:form.get('borrower_name'), principal_amount:Number(form.get('principal_amount')), months_total:Number(form.get('months_total')), minimum_payment:Number(form.get('minimum_payment'))};
+      await api(editing ? `/api/loans/${loan.id}` : '/api/loans', {method:editing ? 'PUT' : 'POST', body:payload});
+      closeModal(); toast(editing ? 'تم تعديل القرض' : 'تم إنشاء القرض', 'success'); await onSaved();
+    } catch (err) { document.getElementById('loan-form-error').textContent = err.message; button.disabled=false; button.innerHTML=original; }
+  });
+}
+
+function openLoanPaymentModal(loan, onSaved = renderLoans) {
+  if (!loan || loan.status === 'paid') return toast('تم تسديد هذا القرض بالكامل', 'error');
+  const body = `<form id="loan-payment-form" class="form-grid">
+    <div class="loan-payment-summary"><div><span>المقترض</span><strong>${escapeHtml(loan.borrower_name)}</strong></div><div><span>المبلغ المتبقي</span><strong>${formatMoney(loan.remaining_amount)}</strong></div><div><span>الأشهر الباقية</span><strong>${loan.remaining_months}</strong></div><div><span>المبلغ المحدد</span><strong>${formatMoney(loan.minimum_payment)}</strong></div></div>
+    <div class="form-row"><label>مبلغ التسديد</label><input class="control" name="amount" type="number" min="0.01" max="${escapeHtml(loan.remaining_amount)}" step="0.01" required autofocus><span class="help">يجب ألا يقل عن ${formatMoney(loan.minimum_payment)} وألا يتجاوز ${formatMoney(loan.remaining_amount)}. إذا كان المتبقي النهائي أقل من الحد الأدنى فيسمح بتسديد المتبقي كاملاً.</span></div>
+    <div class="form-row"><label>ملاحظة اختيارية</label><textarea class="control" name="notes" maxlength="1000" rows="3" placeholder="مثال: تسديد شهر آب"></textarea></div>
+    <div id="loan-payment-error" class="error-text"></div>
+  </form>`;
+  showModal('تسديد القرض', body, ['<button id="loan-payment-cancel" class="btn btn-secondary">إلغاء</button>', `<button id="loan-payment-save" class="btn btn-primary">${icon('check')} تأكيد التسديد</button>`]);
+  document.getElementById('loan-payment-cancel').addEventListener('click', closeModal);
+  document.getElementById('loan-payment-save').addEventListener('click', async event => {
+    const formEl = document.getElementById('loan-payment-form'); if (!formEl.reportValidity()) return;
+    const form = new FormData(formEl); const button=event.currentTarget; const original=button.innerHTML;
+    button.disabled=true; button.innerHTML='<span class="loader"></span> جارٍ التسديد';
+    try {
+      const updated = await api(`/api/loans/${loan.id}/payments`, {method:'POST', body:{amount:Number(form.get('amount')), notes:form.get('notes') || ''}});
+      closeModal(); toast(`تم التسديد. المتبقي ${formatMoney(updated.remaining_amount)} والأشهر الباقية ${updated.remaining_months}`, 'success'); await onSaved();
+    } catch (err) { document.getElementById('loan-payment-error').textContent=err.message; button.disabled=false; button.innerHTML=original; }
+  });
+}
+
+function openLoanDeleteModal(loan, onDeleted = renderLoans) {
+  showModal('حذف القرض نهائياً', `<div class="danger-box"><strong>سيتم حذف القرض وسجل جميع التسديدات نهائياً.</strong><p>${escapeHtml(loan.borrower_name)} — المتبقي ${formatMoney(loan.remaining_amount)}</p></div><div class="form-row"><label>اكتب «حذف نهائي» للتأكيد</label><input id="loan-delete-confirm" class="control" autocomplete="off"></div><div id="loan-delete-error" class="error-text"></div>`, ['<button id="loan-delete-cancel" class="btn btn-secondary">إلغاء</button>', `<button id="loan-delete-go" class="btn btn-danger">${icon('trash')} حذف نهائي</button>`]);
+  document.getElementById('loan-delete-cancel').addEventListener('click', closeModal);
+  document.getElementById('loan-delete-go').addEventListener('click', async event => {
+    const button=event.currentTarget; const original=button.innerHTML; button.disabled=true; button.innerHTML='<span class="loader"></span> جارٍ الحذف';
+    try { await api(`/api/loans/${loan.id}/permanent`, {method:'DELETE', body:{confirmation:document.getElementById('loan-delete-confirm').value}}); closeModal(); toast('تم حذف القرض نهائياً','success'); await onDeleted(); }
+    catch(err){ document.getElementById('loan-delete-error').textContent=err.message; button.disabled=false; button.innerHTML=original; }
+  });
+}
+
+async function renderLoanDetails(id) {
+  pageLoading('تفاصيل القرض');
+  const loan = await api(`/api/loans/${id}`);
+  const canEdit = state.user.role !== 'viewer';
+  const actions = `<a class="btn btn-secondary" href="#/loans">${icon('chevron')} رجوع للقروض</a><button id="loan-detail-report" class="btn btn-secondary">${icon('print')} تقرير</button>${canEdit && loan.status !== 'paid' ? `<button id="loan-detail-pay" class="btn btn-primary">${icon('check')} تسديد</button>` : ''}${canEdit ? `<button id="loan-detail-edit" class="btn btn-secondary">${icon('edit')} تعديل</button>` : ''}${state.user.role === 'admin' ? `<button id="loan-detail-delete" class="btn btn-danger-soft">${icon('trash')} حذف نهائي</button>` : ''}`;
+  const payments = loan.payments || [];
+  shell('تفاصيل القرض', `
+    <div class="page-header"><div><span class="eyebrow">قروض</span><h1>${escapeHtml(loan.borrower_name)}</h1><p>${loanStatusBadge(loan)}</p></div><div class="page-actions">${actions}</div></div>
+    <div class="loan-detail-grid">
+      <section class="panel"><div class="panel-head"><div><h3>ملخص القرض</h3><p>القيم الحالية بعد آخر عملية تسديد.</p></div>${icon('loan')}</div><div class="loan-stat-grid">
+        <div class="loan-stat"><span>مبلغ القرض</span><strong>${formatMoney(loan.principal_amount)}</strong></div><div class="loan-stat"><span>المبلغ المسدد</span><strong>${formatMoney(loan.paid_amount)}</strong></div><div class="loan-stat emphasis"><span>المبلغ المتبقي</span><strong>${formatMoney(loan.remaining_amount)}</strong></div><div class="loan-stat"><span>الأشهر الأصلية</span><strong>${loan.months_total}</strong></div><div class="loan-stat emphasis"><span>الأشهر الباقية</span><strong>${loan.remaining_months}</strong></div><div class="loan-stat"><span>المبلغ المحدد</span><strong>${formatMoney(loan.minimum_payment)}</strong></div>
+      </div><div class="panel-body loan-meta"><span>أنشأه: <strong>${escapeHtml(loan.created_by_name || '-')}</strong></span><span>تاريخ الإنشاء: <strong>${formatDate(loan.created_at,true)}</strong></span><span>آخر تعديل: <strong>${formatDate(loan.updated_at,true)}</strong></span></div></section>
+      <section class="panel"><div class="panel-head"><div><h3>سجل التسديدات</h3><p>${payments.length} عملية محفوظة.</p></div></div><div class="table-wrap"><table><thead><tr><th>#</th><th>مبلغ التسديد</th><th>المبلغ الباقي</th><th>الأشهر الباقية</th><th>المستخدم</th><th>التاريخ</th><th>ملاحظة</th></tr></thead><tbody>${payments.map((p,index)=>`<tr><td>${payments.length-index}</td><td><strong class="mono">${formatMoney(p.amount)}</strong></td><td class="mono">${formatMoney(p.remaining_amount_after)}</td><td>${p.months_remaining_after}</td><td>${escapeHtml(p.paid_by_name)}</td><td>${formatDate(p.paid_at,true)}</td><td>${escapeHtml(p.notes || '-')}</td></tr>`).join('') || `<tr><td colspan="7"><div class="empty">لم يتم تسجيل أي تسديد بعد.</div></td></tr>`}</tbody></table></div></section>
+    </div>`);
+  document.getElementById('loan-detail-report')?.addEventListener('click', () => openLoanReport(loan));
+  document.getElementById('loan-detail-pay')?.addEventListener('click', () => openLoanPaymentModal(loan, () => renderLoanDetails(id)));
+  document.getElementById('loan-detail-edit')?.addEventListener('click', () => openLoanForm(loan, () => renderLoanDetails(id)));
+  document.getElementById('loan-detail-delete')?.addEventListener('click', () => openLoanDeleteModal(loan, () => navigate('/loans')));
+}
+
 async function renderUsers() {
   pageLoading('المستخدمون');
   const users = await api('/api/users');
@@ -1100,7 +1468,7 @@ function openPermissionsModal(user, pages) {
   if (!user) return;
   const admin = user.role === 'admin';
   const allowed = new Set(user.page_permissions || []);
-  const options = pages.map(page => `<label class="permission-page-option ${admin || allowed.has(page.key) ? 'is-enabled' : ''}"><input type="checkbox" value="${escapeHtml(page.key)}" ${admin || allowed.has(page.key) ? 'checked' : ''} ${admin ? 'disabled' : ''}><span class="permission-page-icon">${page.key === 'dashboard' ? icon('dashboard') : icon('file')}</span><span><strong>${escapeHtml(page.name_ar)}</strong><small>${escapeHtml(page.category)}</small></span></label>`).join('');
+  const options = pages.map(page => `<label class="permission-page-option ${admin || allowed.has(page.key) ? 'is-enabled' : ''}"><input type="checkbox" value="${escapeHtml(page.key)}" ${admin || allowed.has(page.key) ? 'checked' : ''} ${admin ? 'disabled' : ''}><span class="permission-page-icon">${page.key === 'dashboard' ? icon('dashboard') : page.key === 'loans' ? icon('loan') : icon('file')}</span><span><strong>${escapeHtml(page.name_ar)}</strong><small>${escapeHtml(page.category)}</small></span></label>`).join('');
   const footer = admin
     ? ['<button id="permissions-close" class="btn btn-primary">إغلاق</button>']
     : ['<button id="permissions-cancel" class="btn btn-secondary">إلغاء</button>', `<button id="permissions-save" class="btn btn-primary">${icon('save')} حفظ الصلاحيات</button>`];
@@ -1131,11 +1499,11 @@ async function renderAudit() {
   const actionNames = {
     'auth.login':'تسجيل دخول','auth.logout':'تسجيل خروج','auth.login_failed':'محاولة دخول فاشلة','auth.password_changed':'تغيير كلمة المرور','system.setup':'إعداد النظام',
     'document.create':'إنشاء مستند','document.update':'تعديل مستند','document.delete_permanent':'حذف مستند نهائياً','document.print_export':'طباعة/تصدير',
-    'attachment.upload':'رفع مرفق','attachment.delete':'حذف مرفق','attachment.update':'تعديل مرفق','user.create':'إنشاء مستخدم','user.update':'تعديل مستخدم','permission.update':'تعديل صلاحيات الصفحات','system.backup':'إنشاء نسخة احتياطية'
+    'attachment.upload':'رفع مرفق','attachment.delete':'حذف مرفق','attachment.update':'تعديل مرفق','loan.create':'إنشاء قرض','loan.update':'تعديل قرض','loan.payment':'تسديد قرض','loan.delete_permanent':'حذف قرض نهائياً','user.create':'إنشاء مستخدم','user.update':'تعديل مستخدم','permission.update':'تعديل صلاحيات الصفحات','system.backup':'إنشاء نسخة احتياطية'
   };
-  const categoryOf = action => action.startsWith('document.') ? 'documents' : action.startsWith('attachment.') ? 'attachments' : (action.startsWith('user.') || action.startsWith('permission.')) ? 'users' : action.startsWith('auth.') ? 'auth' : 'system';
+  const categoryOf = action => action.startsWith('document.') ? 'documents' : action.startsWith('attachment.') ? 'attachments' : action.startsWith('loan.') ? 'loans' : (action.startsWith('user.') || action.startsWith('permission.')) ? 'users' : action.startsWith('auth.') ? 'auth' : 'system';
   const failedLogins = logs.filter(item => item.action === 'auth.login_failed').length;
-  const permanentDeletes = logs.filter(item => item.action === 'document.delete_permanent').length;
+  const permanentDeletes = logs.filter(item => item.action === 'document.delete_permanent' || item.action === 'loan.delete_permanent').length;
   const renderRows = items => {
     const body = document.getElementById('audit-rows');
     body.innerHTML = items.length ? items.map(log => `<tr><td>${formatDate(log.created_at, true)}</td><td>${escapeHtml(log.user_name || '-')}</td><td><strong>${escapeHtml(actionNames[log.action] || log.action)}</strong></td><td>${escapeHtml(log.entity_type)}</td><td class="mono">${escapeHtml(log.entity_id || '-')}</td><td><code class="audit-details">${escapeHtml(JSON.stringify(log.details))}</code></td></tr>`).join('') : `<tr><td colspan="6"><div class="empty"><div class="stat-icon">${icon('search')}</div><strong>لا توجد عمليات مطابقة</strong><p>غيّر البحث أو نوع العملية.</p></div></td></tr>`;
@@ -1143,7 +1511,7 @@ async function renderAudit() {
   shell('سجل العمليات', `
     <div class="page-header"><div><span class="eyebrow">الرقابة والتدقيق</span><h1>سجل العمليات</h1><p>سجل فعلي لجميع عمليات الدخول والإنشاء والتعديل والطباعة والمرفقات والحذف النهائي.</p></div></div>
     <div class="list-summary"><div class="summary-pill"><strong>${logs.length}</strong><span>عملية مسجلة</span></div><div class="summary-pill"><strong>${failedLogins}</strong><span>محاولة دخول فاشلة</span></div><div class="summary-pill"><strong>${permanentDeletes}</strong><span>حذف نهائي</span></div></div>
-    <div class="panel"><div class="document-toolbar"><div class="filters"><div class="search-box">${icon('search')}<input id="audit-search" class="control" placeholder="بحث بالمستخدم أو العملية أو المعرّف..."></div><select id="audit-category" class="control compact"><option value="">كل العمليات</option><option value="documents">المستندات</option><option value="attachments">المرفقات</option><option value="users">المستخدمون</option><option value="auth">الدخول والحساب</option><option value="system">النظام</option></select></div></div><div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>المستخدم</th><th>العملية</th><th>النوع</th><th>المعرّف</th><th>التفاصيل</th></tr></thead><tbody id="audit-rows"></tbody></table></div></div>`);
+    <div class="panel"><div class="document-toolbar"><div class="filters"><div class="search-box">${icon('search')}<input id="audit-search" class="control" placeholder="بحث بالمستخدم أو العملية أو المعرّف..."></div><select id="audit-category" class="control compact"><option value="">كل العمليات</option><option value="documents">المستندات</option><option value="attachments">المرفقات</option><option value="loans">القروض</option><option value="users">المستخدمون</option><option value="auth">الدخول والحساب</option><option value="system">النظام</option></select></div></div><div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>المستخدم</th><th>العملية</th><th>النوع</th><th>المعرّف</th><th>التفاصيل</th></tr></thead><tbody id="audit-rows"></tbody></table></div></div>`);
   const applyFilters = () => {
     const term = document.getElementById('audit-search').value.trim().toLowerCase();
     const category = document.getElementById('audit-category').value;
@@ -1231,6 +1599,9 @@ async function route() {
       if (canViewPage('dashboard')) return renderDashboard();
       return navigate(firstAllowedRoute());
     }
+    if (path === '/loans') { if (canViewPage('loans')) return renderLoans(); return navigate(firstAllowedRoute()); }
+    let loanMatch = path.match(/^\/loans\/(\d+)$/);
+    if (loanMatch) { if (canViewPage('loans')) return renderLoanDetails(Number(loanMatch[1])); return navigate(firstAllowedRoute()); }
     if (path === '/users' && state.user.role === 'admin') return renderUsers();
     if (path === '/permissions' && state.user.role === 'admin') return renderPermissions();
     if (path === '/reports' && state.user.role === 'admin') return renderReports();

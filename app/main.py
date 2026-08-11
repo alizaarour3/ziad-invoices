@@ -10,6 +10,7 @@ import re
 import sqlite3
 import tempfile
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
@@ -31,6 +32,9 @@ from .schemas import (
     DocumentCreateRequest,
     DocumentUpdateRequest,
     LoginRequest,
+    LoanCreateRequest,
+    LoanPaymentCreateRequest,
+    LoanUpdateRequest,
     PagePermissionsUpdateRequest,
     PrintRequest,
     SetupAdminRequest,
@@ -93,6 +97,12 @@ async def validation_error_handler(_: Request, exc: RequestValidationError):
         "full_name": "الاسم الكامل",
         "role": "الصلاحية",
         "page_keys": "صلاحيات الصفحات",
+        "borrower_name": "الاسم الثلاثي",
+        "principal_amount": "مبلغ القرض",
+        "months_total": "عدد أشهر التسديد",
+        "minimum_payment": "الحد الأدنى للتسديد",
+        "amount": "مبلغ التسديد",
+        "notes": "ملاحظات التسديد",
     }
     label = field_labels.get(field_key, field_key)
     detail = "البيانات المدخلة غير صحيحة"
@@ -132,9 +142,88 @@ def _user_dict(row: Record) -> dict[str, Any]:
     }
 
 
+
+def _money_to_minor(value: float | int | str | Decimal) -> int:
+    try:
+        decimal_value = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="المبلغ المدخل غير صحيح") from exc
+    minor = int(decimal_value * 100)
+    if minor <= 0:
+        raise HTTPException(status_code=422, detail="يجب أن يكون المبلغ أكبر من صفر")
+    return minor
+
+
+def _minor_to_money(value: int) -> str:
+    amount = (Decimal(int(value)) / Decimal(100)).quantize(Decimal("0.01"))
+    return format(amount, ".2f")
+
+
+def _loan_page_access(conn: DBConnection, user: CurrentUser) -> None:
+    _require_page_access(conn, user, "loans")
+
+
+def _loan_dict(conn: DBConnection, row: Record, *, include_payments: bool = False) -> dict[str, Any]:
+    payment_count = int(row["payment_count"]) if "payment_count" in row.keys() else int(
+        conn.execute("SELECT COUNT(*) AS count FROM loan_payments WHERE loan_id=?", (row["id"],)).fetchone()["count"]
+    )
+    paid_minor = int(row["principal_amount_minor"]) - int(row["remaining_amount_minor"])
+    remaining_months = 0 if int(row["remaining_amount_minor"]) == 0 else max(int(row["months_total"]) - payment_count, 0)
+    result: dict[str, Any] = {
+        "id": int(row["id"]),
+        "borrower_name": row["borrower_name"],
+        "principal_amount": _minor_to_money(int(row["principal_amount_minor"])),
+        "months_total": int(row["months_total"]),
+        "minimum_payment": _minor_to_money(int(row["minimum_payment_minor"])),
+        "remaining_amount": _minor_to_money(int(row["remaining_amount_minor"])),
+        "paid_amount": _minor_to_money(paid_minor),
+        "payment_count": payment_count,
+        "remaining_months": remaining_months,
+        "status": "paid" if int(row["remaining_amount_minor"]) == 0 else "active",
+        "created_by": int(row["created_by"]),
+        "created_by_name": row["created_by_name"] if "created_by_name" in row.keys() else None,
+        "updated_by": int(row["updated_by"]),
+        "updated_by_name": row["updated_by_name"] if "updated_by_name" in row.keys() else None,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+    if include_payments:
+        payments = conn.execute(
+            """
+            SELECT p.*, u.full_name AS paid_by_name
+            FROM loan_payments p JOIN users u ON u.id=p.paid_by
+            WHERE p.loan_id=? ORDER BY p.id DESC
+            """,
+            (row["id"],),
+        ).fetchall()
+        result["payments"] = [
+            {
+                "id": int(item["id"]),
+                "amount": _minor_to_money(int(item["amount_minor"])),
+                "remaining_amount_after": _minor_to_money(int(item["remaining_amount_minor_after"])),
+                "months_remaining_after": int(item["months_remaining_after"]),
+                "notes": item["notes"],
+                "paid_by": int(item["paid_by"]),
+                "paid_by_name": item["paid_by_name"],
+                "paid_at": item["paid_at"],
+            }
+            for item in payments
+        ]
+    return result
+
+
+LOAN_SELECT = """
+SELECT l.*, creator.full_name AS created_by_name, updater.full_name AS updated_by_name,
+       (SELECT COUNT(*) FROM loan_payments p WHERE p.loan_id=l.id) AS payment_count
+FROM loans l
+JOIN users creator ON creator.id=l.created_by
+JOIN users updater ON updater.id=l.updated_by
+"""
+
 def _managed_pages(conn: DBConnection) -> list[dict[str, str]]:
     pages: list[dict[str, str]] = [
         {"key": "dashboard", "name_ar": "الداشبورد", "category": "عام"},
+        {"key": "loans", "name_ar": "قروض", "category": "المالية"},
     ]
     rows = conn.execute("SELECT code, name_ar FROM document_types WHERE is_active=1 ORDER BY id").fetchall()
     pages.extend(
@@ -1069,6 +1158,229 @@ def print_document(
         conn.close()
 
 
+
+@app.get("/api/loans")
+def list_loans(
+    user: Annotated[CurrentUser, Depends(require("documents.read"))],
+    q: str = Query(default="", max_length=160),
+    status: str | None = Query(default=None, pattern=r"^(active|paid)$"),
+):
+    conn = connect()
+    try:
+        _loan_page_access(conn, user)
+        where: list[str] = []
+        params: list[Any] = []
+        if q.strip():
+            where.append("l.borrower_name LIKE ?")
+            params.append(f"%{q.strip()}%")
+        if status == "active":
+            where.append("l.remaining_amount_minor > 0")
+        elif status == "paid":
+            where.append("l.remaining_amount_minor = 0")
+        sql = LOAN_SELECT
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY l.updated_at DESC, l.id DESC"
+        rows = conn.execute(sql, params).fetchall()
+        return [_loan_dict(conn, row) for row in rows]
+    finally:
+        conn.close()
+
+
+@app.post("/api/loans", status_code=201)
+def create_loan(
+    payload: LoanCreateRequest,
+    user: Annotated[CurrentUser, Depends(require("documents.create"))],
+):
+    conn = connect()
+    try:
+        _loan_page_access(conn, user)
+        principal = _money_to_minor(payload.principal_amount)
+        minimum = _money_to_minor(payload.minimum_payment)
+        if minimum > principal:
+            raise HTTPException(status_code=422, detail="الحد الأدنى للتسديد لا يمكن أن يكون أكبر من مبلغ القرض")
+        now = utc_iso()
+        with transaction(conn, immediate=True):
+            cursor = conn.execute(
+                """
+                INSERT INTO loans(borrower_name, principal_amount_minor, months_total, minimum_payment_minor,
+                                  remaining_amount_minor, created_by, updated_by, created_at, updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?)
+                """,
+                (payload.borrower_name, principal, payload.months_total, minimum, principal, user.id, user.id, now, now),
+            )
+            loan_id = int(cursor.lastrowid)
+            audit(
+                conn,
+                user_id=user.id,
+                action="loan.create",
+                entity_type="loan",
+                entity_id=loan_id,
+                details={"borrower_name": payload.borrower_name, "principal_amount": _minor_to_money(principal)},
+            )
+        row = conn.execute(LOAN_SELECT + " WHERE l.id=?", (loan_id,)).fetchone()
+        return _loan_dict(conn, row, include_payments=True)
+    finally:
+        conn.close()
+
+
+@app.get("/api/loans/{loan_id}")
+def get_loan(
+    loan_id: int,
+    user: Annotated[CurrentUser, Depends(require("documents.read"))],
+):
+    conn = connect()
+    try:
+        _loan_page_access(conn, user)
+        row = conn.execute(LOAN_SELECT + " WHERE l.id=?", (loan_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="القرض غير موجود")
+        return _loan_dict(conn, row, include_payments=True)
+    finally:
+        conn.close()
+
+
+@app.put("/api/loans/{loan_id}")
+def update_loan(
+    loan_id: int,
+    payload: LoanUpdateRequest,
+    user: Annotated[CurrentUser, Depends(require("documents.update"))],
+):
+    conn = connect()
+    try:
+        _loan_page_access(conn, user)
+        principal = _money_to_minor(payload.principal_amount)
+        minimum = _money_to_minor(payload.minimum_payment)
+        with transaction(conn, immediate=True):
+            lock_sql = "SELECT * FROM loans WHERE id=?" + (" FOR UPDATE" if conn.is_postgres else "")
+            current = conn.execute(lock_sql, (loan_id,)).fetchone()
+            if not current:
+                raise HTTPException(status_code=404, detail="القرض غير موجود")
+            payment_stats = conn.execute(
+                "SELECT COUNT(*) AS count, COALESCE(SUM(amount_minor),0) AS paid FROM loan_payments WHERE loan_id=?",
+                (loan_id,),
+            ).fetchone()
+            payment_count = int(payment_stats["count"] or 0)
+            paid_minor = int(payment_stats["paid"] or 0)
+            if principal < paid_minor:
+                raise HTTPException(status_code=422, detail="مبلغ القرض الجديد لا يمكن أن يكون أقل من المبلغ المسدد")
+            if payload.months_total < payment_count and principal > paid_minor:
+                raise HTTPException(status_code=422, detail="عدد أشهر التسديد لا يمكن أن يكون أقل من عدد عمليات التسديد المنفذة")
+            remaining = principal - paid_minor
+            if remaining > 0 and minimum > principal:
+                raise HTTPException(status_code=422, detail="الحد الأدنى للتسديد لا يمكن أن يكون أكبر من مبلغ القرض")
+            now = utc_iso()
+            conn.execute(
+                """
+                UPDATE loans SET borrower_name=?, principal_amount_minor=?, months_total=?, minimum_payment_minor=?,
+                                 remaining_amount_minor=?, updated_by=?, updated_at=? WHERE id=?
+                """,
+                (payload.borrower_name, principal, payload.months_total, minimum, remaining, user.id, now, loan_id),
+            )
+            audit(
+                conn,
+                user_id=user.id,
+                action="loan.update",
+                entity_type="loan",
+                entity_id=loan_id,
+                details={"borrower_name": payload.borrower_name, "principal_amount": _minor_to_money(principal)},
+            )
+        row = conn.execute(LOAN_SELECT + " WHERE l.id=?", (loan_id,)).fetchone()
+        return _loan_dict(conn, row, include_payments=True)
+    finally:
+        conn.close()
+
+
+@app.post("/api/loans/{loan_id}/payments", status_code=201)
+def create_loan_payment(
+    loan_id: int,
+    payload: LoanPaymentCreateRequest,
+    user: Annotated[CurrentUser, Depends(require("documents.update"))],
+):
+    conn = connect()
+    try:
+        _loan_page_access(conn, user)
+        amount = _money_to_minor(payload.amount)
+        with transaction(conn, immediate=True):
+            lock_sql = "SELECT * FROM loans WHERE id=?" + (" FOR UPDATE" if conn.is_postgres else "")
+            loan = conn.execute(lock_sql, (loan_id,)).fetchone()
+            if not loan:
+                raise HTTPException(status_code=404, detail="القرض غير موجود")
+            remaining = int(loan["remaining_amount_minor"])
+            if remaining <= 0:
+                raise HTTPException(status_code=409, detail="تم تسديد هذا القرض بالكامل")
+            if amount > remaining:
+                raise HTTPException(status_code=422, detail="مبلغ التسديد أكبر من المبلغ المتبقي")
+            minimum = int(loan["minimum_payment_minor"])
+            # The final payment may equal the exact remaining balance even when that balance is below the configured minimum.
+            if amount < minimum and amount != remaining:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"لا يمكن تسديد مبلغ أقل من الحد الأدنى {_minor_to_money(minimum)}",
+                )
+            payment_count = int(conn.execute("SELECT COUNT(*) AS count FROM loan_payments WHERE loan_id=?", (loan_id,)).fetchone()["count"])
+            remaining_after = remaining - amount
+            months_remaining_after = 0 if remaining_after == 0 else max(int(loan["months_total"]) - (payment_count + 1), 0)
+            now = utc_iso()
+            cursor = conn.execute(
+                """
+                INSERT INTO loan_payments(loan_id, amount_minor, remaining_amount_minor_after,
+                                          months_remaining_after, notes, paid_by, paid_at)
+                VALUES(?,?,?,?,?,?,?)
+                """,
+                (loan_id, amount, remaining_after, months_remaining_after, payload.notes.strip(), user.id, now),
+            )
+            conn.execute(
+                "UPDATE loans SET remaining_amount_minor=?, updated_by=?, updated_at=? WHERE id=?",
+                (remaining_after, user.id, now, loan_id),
+            )
+            audit(
+                conn,
+                user_id=user.id,
+                action="loan.payment",
+                entity_type="loan",
+                entity_id=loan_id,
+                details={
+                    "payment_id": int(cursor.lastrowid),
+                    "amount": _minor_to_money(amount),
+                    "remaining_amount": _minor_to_money(remaining_after),
+                    "remaining_months": months_remaining_after,
+                },
+            )
+        row = conn.execute(LOAN_SELECT + " WHERE l.id=?", (loan_id,)).fetchone()
+        return _loan_dict(conn, row, include_payments=True)
+    finally:
+        conn.close()
+
+
+@app.delete("/api/loans/{loan_id}/permanent")
+def delete_loan_permanent(
+    loan_id: int,
+    payload: DeleteRequest,
+    user: Annotated[CurrentUser, Depends(require("documents.delete"))],
+):
+    if payload.confirmation.strip() != "حذف نهائي":
+        raise HTTPException(status_code=422, detail="اكتب عبارة حذف نهائي للتأكيد")
+    conn = connect()
+    try:
+        _loan_page_access(conn, user)
+        with transaction(conn, immediate=True):
+            row = conn.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="القرض غير موجود")
+            audit(
+                conn,
+                user_id=user.id,
+                action="loan.delete_permanent",
+                entity_type="loan",
+                entity_id=loan_id,
+                details={"borrower_name": row["borrower_name"]},
+            )
+            conn.execute("DELETE FROM loans WHERE id=?", (loan_id,))
+        return {"ok": True}
+    finally:
+        conn.close()
+
 @app.get("/api/users")
 def list_users(_: Annotated[CurrentUser, Depends(require("users.manage"))]):
     conn = connect()
@@ -1264,6 +1576,8 @@ def system_status(_: Annotated[CurrentUser, Depends(require("system.manage"))]):
             "users": conn.execute("SELECT COUNT(*) FROM users").fetchone()[0],
             "documents": conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0],
             "attachments": conn.execute("SELECT COUNT(*) FROM attachments").fetchone()[0],
+            "loans": conn.execute("SELECT COUNT(*) FROM loans").fetchone()[0],
+            "loan_payments": conn.execute("SELECT COUNT(*) FROM loan_payments").fetchone()[0],
         }
         attachment_bytes = conn.execute("SELECT COALESCE(SUM(size_bytes),0) FROM attachments").fetchone()[0]
     finally:

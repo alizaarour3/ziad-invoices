@@ -1,4 +1,4 @@
--- Optional manual bootstrap for Ziad Invoices Professional 3.3.4.
+-- Optional manual bootstrap for Ziad Invoices Professional 3.3.11.
 -- The application creates the same schema automatically on startup.
 
 create table if not exists public.schema_meta (
@@ -31,6 +31,17 @@ create table if not exists public.sessions (
 );
 create index if not exists idx_sessions_user_id on public.sessions(user_id);
 create index if not exists idx_sessions_expires_at on public.sessions(expires_at);
+
+
+create table if not exists public.user_page_permissions (
+  user_id bigint not null references public.users(id) on delete cascade,
+  page_key text not null,
+  can_view integer not null default 1 check (can_view in (0,1)),
+  updated_at text not null,
+  updated_by bigint references public.users(id) on delete set null,
+  primary key(user_id, page_key)
+);
+create index if not exists idx_user_page_permissions_page on public.user_page_permissions(page_key, can_view);
 
 create table if not exists public.document_types (
   id bigserial primary key,
@@ -90,6 +101,36 @@ create table if not exists public.attachments (
   created_at text not null
 );
 create index if not exists idx_attachments_document on public.attachments(document_id, print_order, id);
+
+
+create table if not exists public.loans (
+  id bigserial primary key,
+  borrower_name text not null,
+  principal_amount_minor bigint not null check (principal_amount_minor > 0),
+  months_total integer not null check (months_total > 0),
+  minimum_payment_minor bigint not null check (minimum_payment_minor > 0),
+  remaining_amount_minor bigint not null check (remaining_amount_minor >= 0),
+  created_by bigint not null references public.users(id),
+  updated_by bigint not null references public.users(id),
+  created_at text not null,
+  updated_at text not null
+);
+create index if not exists idx_loans_borrower_name on public.loans(borrower_name);
+create index if not exists idx_loans_remaining on public.loans(remaining_amount_minor);
+create index if not exists idx_loans_updated_at on public.loans(updated_at desc);
+
+create table if not exists public.loan_payments (
+  id bigserial primary key,
+  loan_id bigint not null references public.loans(id) on delete cascade,
+  amount_minor bigint not null check (amount_minor > 0),
+  remaining_amount_minor_after bigint not null check (remaining_amount_minor_after >= 0),
+  months_remaining_after integer not null check (months_remaining_after >= 0),
+  notes text not null default '',
+  paid_by bigint not null references public.users(id),
+  paid_at text not null
+);
+create index if not exists idx_loan_payments_loan on public.loan_payments(loan_id, id);
+create index if not exists idx_loan_payments_paid_at on public.loan_payments(paid_at desc);
 
 create table if not exists public.audit_logs (
   id bigserial primary key,

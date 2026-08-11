@@ -155,6 +155,7 @@ def test_users_and_permissions():
         me = client.get("/api/auth/me", headers=viewer_headers)
         assert me.status_code == 200
         assert "documents.TR" in me.json()["page_permissions"]
+        assert "loans" in me.json()["page_permissions"]
         assert client.get("/api/documents", headers=viewer_headers).status_code == 200
         assert client.post("/api/documents", headers=viewer_headers, json={"type_code": "PR", "fields": {}}).status_code == 403
         assert client.get("/api/users", headers=viewer_headers).status_code == 403
@@ -168,7 +169,7 @@ def test_users_and_permissions():
         permissions = client.get("/api/permissions", headers=admin_headers)
         assert permissions.status_code == 200
         assert {page["key"] for page in permissions.json()["pages"]} == {
-            "dashboard", "documents.RV", "documents.PR", "documents.PV", "documents.VM", "documents.TR"
+            "dashboard", "loans", "documents.RV", "documents.PR", "documents.PV", "documents.VM", "documents.TR"
         }
         changed = client.put(
             f"/api/permissions/users/{editor['id']}",
@@ -223,7 +224,7 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.10'
+        assert status_data['version'] == '3.3.14'
         assert status_data['database']['ok'] is True
         assert status_data['counts']['documents'] == 1
         assert len(status_data['templates']) == 15
@@ -244,7 +245,7 @@ def test_system_status_and_backup():
             assert 'app/static/form-templates/receipt-voucher.html' in names
             assert 'app/static/form-templates/request-transfer.html' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.10'
+            assert manifest['version'] == '3.3.14'
             assert manifest['files']
 
 
@@ -489,3 +490,88 @@ def test_exact_html_templates_are_immutable_and_all_field_selectors_exist():
             assert selectors and all(selectors), f"{code}:{field['key']} has no HTML selector"
             for selector in selectors:
                 assert soup.select_one(selector) is not None, f"{code}:{field['key']} missing {selector}"
+
+
+
+def test_loans_lifecycle_payments_and_permissions():
+    with TestClient(app) as client:
+        client.post('/api/setup/admin', json={'full_name':'Admin','username':'admin','password':'StrongPass123!'})
+        token = client.post('/api/auth/login', json={'username':'admin','password':'StrongPass123!'}).json()['token']
+        headers = auth_headers(token)
+
+        created = client.post('/api/loans', headers=headers, json={
+            'borrower_name':'أحمد علي حسن',
+            'principal_amount':1200,
+            'months_total':12,
+            'minimum_payment':100,
+        })
+        assert created.status_code == 201, created.text
+        loan = created.json()
+        assert loan['remaining_amount'] == '1200.00'
+        assert loan['remaining_months'] == 12
+        assert loan['payment_count'] == 0
+
+        too_small = client.post(f"/api/loans/{loan['id']}/payments", headers=headers, json={'amount':50,'notes':''})
+        assert too_small.status_code == 422
+        paid = client.post(f"/api/loans/{loan['id']}/payments", headers=headers, json={'amount':100,'notes':'الدفعة الأولى'})
+        assert paid.status_code == 201, paid.text
+        assert paid.json()['remaining_amount'] == '1100.00'
+        assert paid.json()['remaining_months'] == 11
+        assert paid.json()['payment_count'] == 1
+        assert paid.json()['payments'][0]['notes'] == 'الدفعة الأولى'
+
+        edited = client.put(f"/api/loans/{loan['id']}", headers=headers, json={
+            'borrower_name':'أحمد علي حسن',
+            'principal_amount':1300,
+            'months_total':13,
+            'minimum_payment':100,
+        })
+        assert edited.status_code == 200, edited.text
+        assert edited.json()['remaining_amount'] == '1200.00'
+        assert edited.json()['remaining_months'] == 12
+
+        # A final exact payoff is accepted and forces remaining months to zero.
+        payoff = client.post(f"/api/loans/{loan['id']}/payments", headers=headers, json={'amount':1200,'notes':'إقفال القرض'})
+        assert payoff.status_code == 201, payoff.text
+        assert payoff.json()['remaining_amount'] == '0.00'
+        assert payoff.json()['remaining_months'] == 0
+        assert payoff.json()['status'] == 'paid'
+
+        viewer = client.post('/api/users', headers=headers, json={
+            'full_name':'Loan Viewer','username':'loan.viewer','password':'ViewerPass123!','role':'viewer'
+        }).json()
+        client.put(f"/api/permissions/users/{viewer['id']}", headers=headers, json={'page_keys':['loans']})
+        viewer_token = client.post('/api/auth/login', json={'username':'loan.viewer','password':'ViewerPass123!'}).json()['token']
+        viewer_headers = auth_headers(viewer_token)
+        assert client.get('/api/loans', headers=viewer_headers).status_code == 200
+        assert client.post('/api/loans', headers=viewer_headers, json={
+            'borrower_name':'مستخدم اختبار ثلاثي','principal_amount':100,'months_total':1,'minimum_payment':100
+        }).status_code == 403
+
+        removed = client.put(f"/api/permissions/users/{viewer['id']}", headers=headers, json={'page_keys':[]})
+        assert removed.status_code == 200
+        assert client.get('/api/loans', headers=viewer_headers).status_code == 403
+
+        bad_delete = client.request('DELETE', f"/api/loans/{loan['id']}/permanent", headers=headers, json={'confirmation':'delete'})
+        assert bad_delete.status_code == 422
+        deleted = client.request('DELETE', f"/api/loans/{loan['id']}/permanent", headers=headers, json={'confirmation':'حذف نهائي'})
+        assert deleted.status_code == 200
+        assert client.get(f"/api/loans/{loan['id']}", headers=headers).status_code == 404
+
+
+def test_v3314_transfer_workspace_and_dashboard_ui_contract():
+    import hashlib
+
+    project = Path(__file__).resolve().parents[1]
+    javascript = (project / 'app' / 'static' / 'app.js').read_text(encoding='utf-8')
+    stylesheet = (project / 'app' / 'static' / 'styles.css').read_text(encoding='utf-8')
+    transfer_html = project / 'app' / 'static' / 'form-templates' / 'request-transfer.html'
+
+    assert 'renderTransferList' in javascript
+    assert 'transfer-page-hero' in javascript
+    assert 'dashboard-hero' in javascript
+    assert 'dashboard-finance-panel' in javascript
+    assert 'transfer-document-header' in javascript
+    assert '.transfer-summary-grid' in stylesheet
+    assert '.dashboard-kpi-grid' in stylesheet
+    assert hashlib.sha256(transfer_html.read_bytes()).hexdigest() == '02560523c3cf78c0e4bd948e6b2961e38e10ae727deacd5c076c3783cb21ad48'
