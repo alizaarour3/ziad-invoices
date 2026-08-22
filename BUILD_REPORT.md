@@ -1,18 +1,22 @@
-# Ziad Invoices Professional v3.3.17 — Build Report
+# Ziad Invoices Professional v3.3.18 — Build Report
 
 Release scope:
-- Invoice data font minimum: 16pt in editor + printed HTML/PDF output.
-- New financial page: Advances / سلف with repayment history and permissions.
-- Automatic database schema migration to version 7.
-- Supabase RLS hardening extended to the new financial tables.
+- Disable automatic login account lockout after repeated failed attempts.
+- Recover automatically from stale lock values created by older releases.
+- Harden document printing on Render and remove opaque 5xx/505-style failures where possible.
+- Add calibrated PDF overlay fallback for RV / PR / PV / VM when browser rendering fails.
 
 Validated locally:
 - Python compile: PASS
 - JavaScript syntax check: PASS
-- Automated tests: 16/16 PASS
-- Official HTML template hashes: unchanged from v3.3.16
-- Advances lifecycle/permissions: PASS
-- 16pt editor + print font contract: PASS
-- Supabase RLS table coverage: PASS
+- Automated tests: 17/17 PASS
+- Printing runtime: Chromium PASS / Playwright PASS / BeautifulSoup PASS
+- RV print: A4 PASS
+- PR print: A4 PASS
+- PV print: A4 PASS
+- VM print: A4 PASS
+- TR print: A4 PASS
+- Failed login stress: 12 wrong attempts followed by correct login PASS
+- Official HTML template hashes: unchanged from v3.3.17
 
-No official HTML invoice template file is modified by this release.
+No database migration is required. No official HTML form file was modified.

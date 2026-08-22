@@ -225,8 +225,11 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.17'
+        assert status_data['version'] == '3.3.18'
         assert status_data['database']['ok'] is True
+        assert status_data['printing']['ready'] is True
+        assert status_data['printing']['chromium'] is True
+        assert status_data['printing']['playwright'] is True
         assert status_data['counts']['documents'] == 1
         assert len(status_data['templates']) == 15
         assert all(item['ok'] is True for item in status_data['templates'])
@@ -246,7 +249,7 @@ def test_system_status_and_backup():
             assert 'app/static/form-templates/receipt-voucher.html' in names
             assert 'app/static/form-templates/request-transfer.html' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.17'
+            assert manifest['version'] == '3.3.18'
             assert manifest['files']
 
 
@@ -266,24 +269,31 @@ def test_html_template_static_urls_are_served():
             assert '<html' in response.text.lower() or '<!doctype html' in response.text.lower()
 
 
-def test_account_lockout_and_password_change():
+def test_failed_login_attempts_never_lock_account_and_password_change():
     with TestClient(app) as client:
         client.post('/api/setup/admin', json={'full_name':'Admin','username':'admin','password':'StrongPass123!'})
-        for _ in range(5):
+        for _ in range(12):
             response = client.post('/api/auth/login', json={'username':'admin','password':'wrong-password'})
             assert response.status_code == 401
-        locked = client.post('/api/auth/login', json={'username':'admin','password':'StrongPass123!'})
-        assert locked.status_code == 423
 
+        # v3.3.18 explicitly removes automatic account lockout. Even a stale
+        # locked_until value left by an older release must not block a valid login.
         from app.db import connect
         conn = connect()
         try:
-            conn.execute("UPDATE users SET locked_until=NULL, failed_login_count=0 WHERE username='admin'")
+            conn.execute("UPDATE users SET locked_until='2099-01-01T00:00:00+00:00' WHERE username='admin'")
         finally:
             conn.close()
 
         login = client.post('/api/auth/login', json={'username':'admin','password':'StrongPass123!'})
         assert login.status_code == 200
+        conn = connect()
+        try:
+            row = conn.execute("SELECT failed_login_count, locked_until FROM users WHERE username='admin'").fetchone()
+            assert row['failed_login_count'] == 0
+            assert row['locked_until'] is None
+        finally:
+            conn.close()
         token = login.json()['token']
         changed = client.post('/api/auth/change-password', headers=auth_headers(token), json={
             'current_password':'StrongPass123!', 'new_password':'NewStrongPass456!'
@@ -682,6 +692,33 @@ def test_v3315_loan_report_is_in_app_and_popup_free():
     assert ".loan-report-paper" in stylesheet
     assert "loan-report-print-btn" in javascript
 
+
+
+
+def test_print_renderer_has_calibrated_pdf_fallback(monkeypatch):
+    import json
+    from app.services import pdf_service
+
+    project = Path(__file__).resolve().parents[1]
+    config = json.loads((project / 'config' / 'templates.json').read_text(encoding='utf-8'))
+
+    def fail_html(*_args, **_kwargs):
+        raise RuntimeError('simulated browser renderer failure')
+
+    monkeypatch.setattr(pdf_service, '_render_html_template_pdf', fail_html)
+    output = TEST_DATA / 'fallback-pr.pdf'
+    pdf_service.render_document_pdf(config['PR'], {
+        'requester_name': 'اختبار الطباعة',
+        'amount': '50000',
+        'currency': 'IQD',
+    }, output)
+    assert output.exists() and output.stat().st_size > 10_000
+    reader = PdfReader(str(output))
+    assert len(reader.pages) == 1
+    width_mm = float(reader.pages[0].mediabox.width) * 25.4 / 72
+    height_mm = float(reader.pages[0].mediabox.height) * 25.4 / 72
+    assert width_mm == pytest.approx(210, abs=0.2)
+    assert height_mm == pytest.approx(297, abs=0.2)
 
 def test_supabase_security_hardening_statements():
     from app.db import SUPABASE_APP_TABLES, _harden_supabase_public_schema

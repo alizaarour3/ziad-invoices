@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -23,6 +24,8 @@ A4_SIZE = (2480, 3508)
 BASE_EDITOR_WIDTH = 794
 HTML_DATA_MIN_FONT_PT = 16
 HTML_DATA_MIN_FONT_PX = HTML_DATA_MIN_FONT_PT * 96 / 72
+
+logger = logging.getLogger(__name__)
 
 
 ARABIC_RANGES = (
@@ -351,6 +354,40 @@ def _find_chromium() -> str | None:
     return None
 
 
+def printing_status() -> dict[str, Any]:
+    """Return non-secret runtime diagnostics for the document print engine."""
+    chromium = _find_chromium()
+    try:
+        from playwright.sync_api import sync_playwright as _sync_playwright  # noqa: F401
+        playwright_ok = True
+    except Exception:
+        playwright_ok = False
+    try:
+        import bs4 as _bs4  # noqa: F401
+        beautifulsoup_ok = True
+    except Exception:
+        beautifulsoup_ok = False
+    return {
+        "ready": bool(chromium and playwright_ok and beautifulsoup_ok),
+        "chromium": bool(chromium),
+        "playwright": playwright_ok,
+        "beautifulsoup": beautifulsoup_ok,
+    }
+
+
+def _validate_a4_pdf(path: Path) -> None:
+    if not path.exists() or path.stat().st_size < 1000:
+        raise RuntimeError("Generated print PDF is empty")
+    reader = PdfReader(str(path))
+    if not reader.pages:
+        raise RuntimeError("Generated print PDF has no pages")
+    first = reader.pages[0]
+    width_mm = float(first.mediabox.width) * 25.4 / 72
+    height_mm = float(first.mediabox.height) * 25.4 / 72
+    if abs(width_mm - 210.0) > 1.0 or abs(height_mm - 297.0) > 1.0:
+        raise RuntimeError(f"Generated page is not A4: {width_mm:.2f}x{height_mm:.2f} mm")
+
+
 def _html_selectors(field: dict[str, Any]) -> list[str]:
     selectors = field.get("html_selectors")
     if isinstance(selectors, list) and selectors:
@@ -394,9 +431,8 @@ def _render_html_template_pdf(template: dict[str, Any], values: dict[str, Any], 
         )
 
     soup = BeautifulSoup(source_path.read_text(encoding="utf-8"), "html.parser")
-    # Uploaded HTML stays byte-for-byte untouched on disk. Only this temporary
-    # in-memory render copy has its convenience scripts removed so browser
-    # localStorage can never override data saved by the application.
+    # The official HTML file is never rewritten. The print engine only changes
+    # this in-memory copy so saved application values can be rendered safely.
     for script in soup.find_all("script"):
         script.decompose()
 
@@ -465,7 +501,7 @@ def _render_html_template_pdf(template: dict[str, Any], values: dict[str, Any], 
                 root = page.locator(root_selector).first
                 if root.count() != 1:
                     raise RuntimeError(f"HTML template root not found: {template_name} :: {root_selector}")
-                root.screenshot(path=str(temp_png), animations="disabled")
+                root.screenshot(path=str(temp_png), animations="disabled", timeout=45000)
                 context.close()
             finally:
                 browser.close()
@@ -473,14 +509,33 @@ def _render_html_template_pdf(template: dict[str, Any], values: dict[str, Any], 
         with Image.open(temp_png) as rendered:
             a4 = rendered.convert("RGB").resize(A4_SIZE, Image.Resampling.LANCZOS)
             a4.save(output_path, "PDF", resolution=float(A4_DPI), quality=95)
+        _validate_a4_pdf(output_path)
+        return output_path
+    except Exception as exc:
+        logger.exception("Exact HTML print renderer failed for %s", template_name)
+        raise RuntimeError(f"Exact HTML print renderer failed for {template_name}: {type(exc).__name__}: {exc}") from exc
     finally:
         temp_png.unlink(missing_ok=True)
-    return output_path
-
 
 def render_document_pdf(template: dict, values: dict[str, Any], output_path: Path) -> Path:
     if template.get("template_engine") == "html" and template.get("html_template"):
-        return _render_html_template_pdf(template, values, output_path)
+        try:
+            return _render_html_template_pdf(template, values, output_path)
+        except Exception:
+            # Four original document types still carry their calibrated PDF field
+            # geometry. If the browser renderer fails on Render, use that proven
+            # PDF overlay path instead of returning a generic 5xx print error.
+            fields = template.get("fields", [])
+            legacy_ready = bool(template.get("pdf")) and all(
+                (all(key in field for key in ("x", "y", "w", "h")) or field.get("line_boxes"))
+                for field in fields
+            )
+            if not legacy_ready:
+                raise
+            logger.warning(
+                "Falling back to calibrated PDF overlay for %s after HTML renderer failure",
+                template.get("html_template"),
+            )
 
     """Place entered values on a separate overlay and merge it with the untouched source PDF.
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
@@ -52,24 +52,17 @@ def authenticate(username: str, password: str) -> tuple[str, dict]:
             "SELECT * FROM users WHERE username=? COLLATE NOCASE",
             (username.strip(),),
         ).fetchone()
-        now_dt = datetime.now(timezone.utc)
-        if row and row["locked_until"]:
-            locked_until = datetime.fromisoformat(row["locked_until"])
-            if locked_until > now_dt:
-                raise HTTPException(status_code=status.HTTP_423_LOCKED, detail="تم قفل الحساب مؤقتاً بعد محاولات دخول فاشلة")
-
+        # v3.3.18: failed login attempts are audited but never lock the account.
+        # Existing locked_until values from older releases are deliberately ignored
+        # and cleared on the next attempt so administrators cannot be locked out.
         valid = bool(row and row["is_active"] and verify_password(password, row["password_salt"], row["password_hash"]))
         if not valid:
             with transaction(conn, immediate=True):
                 if row:
                     failures = int(row["failed_login_count"] or 0) + 1
-                    locked_until = None
-                    if failures >= 5:
-                        locked_until = (now_dt + timedelta(minutes=15)).isoformat()
-                        failures = 0
                     conn.execute(
-                        "UPDATE users SET failed_login_count=?, locked_until=?, updated_at=? WHERE id=?",
-                        (failures, locked_until, utc_iso(), row["id"]),
+                        "UPDATE users SET failed_login_count=?, locked_until=NULL, updated_at=? WHERE id=?",
+                        (failures, utc_iso(), row["id"]),
                     )
                 audit(
                     conn,

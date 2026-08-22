@@ -4,6 +4,7 @@ import hashlib
 import csv
 import io
 import json
+import logging
 import mimetypes
 import os
 import re
@@ -45,10 +46,12 @@ from .schemas import (
     UserUpdateRequest,
 )
 from .security import hash_password, utc_iso, verify_password
-from .services.pdf_service import arabic_rendering_status, build_print_bundle
+from .services.pdf_service import arabic_rendering_status, build_print_bundle, printing_status
 from .services.backup_service import APP_VERSION, create_backup, database_integrity, template_integrity
 from .services.storage_service import StorageError, storage
 from .settings import DATA_DIR, GENERATED_DIR, MAX_ATTACHMENT_BYTES, STATIC_DIR
+
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -483,7 +486,7 @@ JOIN users updater ON updater.id=d.updated_by
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "version": APP_VERSION, "arabic_rendering": arabic_rendering_status()}
+    return {"ok": True, "version": APP_VERSION, "arabic_rendering": arabic_rendering_status(), "printing": printing_status()}
 
 
 @app.get("/api/setup/status")
@@ -1199,13 +1202,25 @@ def print_document(
                 attachment_data = dict(item)
                 attachment_data["local_path"] = str(local_path)
                 prepared_attachments.append(attachment_data)
-            pdf_path = build_print_bundle(
-                document_id=document_id,
-                revision=row["revision"],
-                template=template,
-                values=values,
-                attachments=prepared_attachments,
-            )
+            try:
+                pdf_path = build_print_bundle(
+                    document_id=document_id,
+                    revision=row["revision"],
+                    template=template,
+                    values=values,
+                    attachments=prepared_attachments,
+                )
+            except Exception as exc:
+                logger.exception(
+                    "Document print failed: id=%s number=%s type=%s",
+                    document_id,
+                    row["document_number"],
+                    row["type_code"],
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="تعذر تجهيز ملف الطباعة على الخادم. تم تشغيل مسار الطباعة الاحتياطي أيضاً ولم ينجح. حاول مرة أخرى، وإذا استمر الخطأ راجع سجل Render للطباعة.",
+                ) from exc
         with transaction(conn, immediate=True):
             conn.execute("UPDATE documents SET print_count=print_count+1 WHERE id=?", (document_id,))
             audit(
@@ -1853,6 +1868,7 @@ def system_status(_: Annotated[CurrentUser, Depends(require("system.manage"))]):
         "database": database_integrity(),
         "storage": storage.status(),
         "arabic_rendering": arabic_rendering_status(),
+        "printing": printing_status(),
         "templates": template_integrity(),
         "counts": counts,
         "attachment_bytes": attachment_bytes,
