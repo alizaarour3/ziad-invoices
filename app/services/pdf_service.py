@@ -22,8 +22,8 @@ from ..settings import ATTACHMENTS_DIR, GENERATED_DIR, STATIC_DIR, TEMPLATES_DIR
 A4_DPI = 300
 A4_SIZE = (2480, 3508)
 BASE_EDITOR_WIDTH = 794
-HTML_DATA_MIN_FONT_PT = 16
-HTML_DATA_MIN_FONT_PX = HTML_DATA_MIN_FONT_PT * 96 / 72
+HTML_DATA_FONT_PT = 16
+HTML_DATA_FONT_PX = HTML_DATA_FONT_PT * 96 / 72
 
 logger = logging.getLogger(__name__)
 
@@ -396,6 +396,17 @@ def _html_selectors(field: dict[str, Any]) -> list[str]:
     return [str(selector)] if selector else []
 
 
+def _html_line_count(field: dict[str, Any], selectors: list[str]) -> int:
+    line_boxes = field.get("line_boxes") or []
+    line_positions = field.get("line_positions") or []
+    return max(
+        int(field.get("line_count") or 0),
+        len(line_boxes),
+        len(line_positions),
+        len(selectors) if len(selectors) > 1 else 0,
+    )
+
+
 def _set_html_value(element: Any, value: Any, field_type: str) -> None:
     if field_type == "checkbox" or element.name == "input" and element.get("type", "").lower() == "checkbox":
         truthy = value in (True, 1, "1", "true", "on", "yes")
@@ -436,11 +447,21 @@ def _render_html_template_pdf(template: dict[str, Any], values: dict[str, Any], 
     for script in soup.find_all("script"):
         script.decompose()
 
+    print_specs: list[dict[str, Any]] = []
     for field in template.get("fields", []):
         selectors = _html_selectors(field)
         if not selectors:
             continue
         raw = values.get(field.get("key"), "")
+        print_specs.append({
+            "key": str(field.get("key") or ""),
+            "selectors": selectors,
+            "lineCount": _html_line_count(field, selectors),
+            "isLine": bool(field.get("html_line")),
+            "direction": str(field.get("direction") or ""),
+            "align": str(field.get("align") or ""),
+            "fieldType": str(field.get("type") or "text"),
+        })
         if len(selectors) > 1:
             parts = str(raw or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
             parts = (parts + [""] * len(selectors))[: len(selectors)]
@@ -460,6 +481,31 @@ def _render_html_template_pdf(template: dict[str, Any], values: dict[str, Any], 
       [data-ziad-print-field="1"] {
         outline:none !important; box-shadow:none !important;
         caret-color:transparent !important;
+      }
+      [data-ziad-print-field="1"]:not(input[type="checkbox"]) {
+        font-size:16pt !important;
+      }
+      [data-ziad-print-line="1"] {
+        font-size:16pt !important; line-height:1 !important; box-sizing:border-box !important;
+      }
+      [contenteditable][data-ziad-print-line="1"] {
+        display:flex !important; align-items:flex-end !important;
+        padding-top:0 !important; padding-bottom:.75mm !important;
+      }
+      input[data-ziad-print-line="1"] {
+        line-height:1 !important; padding-top:0 !important; padding-bottom:.55mm !important;
+        transform:translateY(-.85mm) !important;
+      }
+      .ziad-print-split-lines {
+        position:absolute !important; z-index:12 !important; display:grid !important;
+        overflow:visible !important; background:transparent !important;
+      }
+      .ziad-print-split-line {
+        min-width:0 !important; min-height:0 !important; display:flex !important; align-items:flex-end !important;
+        white-space:nowrap !important; overflow:hidden !important; background:transparent !important;
+        border:0 !important; outline:0 !important; font-family:Arial,Tahoma,"Segoe UI",sans-serif !important;
+        font-size:16pt !important; font-weight:600 !important; line-height:1 !important;
+        padding:0 .42em .55mm !important; box-sizing:border-box !important;
       }
     """
     if soup.head:
@@ -488,15 +534,57 @@ def _render_html_template_pdf(template: dict[str, Any], values: dict[str, Any], 
                 page = context.new_page()
                 page.set_content(str(soup), wait_until="load", timeout=45000)
                 page.evaluate(
-                    """(minimumPx) => {
-                        document.querySelectorAll('[data-ziad-print-field="1"]').forEach((element) => {
-                            const current = parseFloat(getComputedStyle(element).fontSize || '0');
-                            if (Number.isFinite(current) && current < minimumPx) {
-                                element.style.setProperty('font-size', '16pt', 'important');
+                    """(payload) => {
+                        const exactFont = `${payload.fontPt}pt`;
+                        const normalize = (value) => String(value ?? '').replace(/\\r\\n?/g, '\\n');
+
+                        payload.specs.forEach((spec) => {
+                            const elements = spec.selectors.map((selector) => document.querySelector(selector)).filter(Boolean);
+                            elements.forEach((element) => {
+                                if (!(spec.fieldType === 'checkbox' || element.type === 'checkbox')) {
+                                    element.style.setProperty('font-size', exactFont, 'important');
+                                }
+                                if (spec.isLine) element.dataset.ziadPrintLine = '1';
+                            });
+
+                            if (!(spec.isLine && spec.lineCount > 1 && elements.length === 1 && elements[0].matches('textarea'))) return;
+                            const source = elements[0];
+                            const computed = getComputedStyle(source);
+                            const wrapper = document.createElement('div');
+                            wrapper.className = 'ziad-print-split-lines';
+                            wrapper.style.left = source.style.left || computed.left || '0';
+                            wrapper.style.top = source.style.top || computed.top || '0';
+                            wrapper.style.width = source.style.width || computed.width || '100%';
+                            wrapper.style.height = source.style.height || computed.height || '100%';
+                            wrapper.style.gridTemplateRows = `repeat(${spec.lineCount}, minmax(0,1fr))`;
+                            wrapper.style.direction = spec.direction || source.getAttribute('dir') || computed.direction || 'rtl';
+                            wrapper.style.textAlign = spec.align || computed.textAlign || 'right';
+                            if (computed.transform && computed.transform !== 'none') wrapper.style.transform = computed.transform;
+                            wrapper.style.transformOrigin = computed.transformOrigin || 'center center';
+
+                            let parts = normalize(source.value || source.textContent || '').split('\\n');
+                            if (parts.length > spec.lineCount) {
+                                parts = [...parts.slice(0, spec.lineCount - 1), parts.slice(spec.lineCount - 1).join(' ')];
                             }
+                            while (parts.length < spec.lineCount) parts.push('');
+                            parts.slice(0, spec.lineCount).forEach((value) => {
+                                const line = document.createElement('div');
+                                line.className = 'ziad-print-split-line';
+                                line.dataset.ziadPrintField = '1';
+                                line.dataset.ziadPrintLine = '1';
+                                line.setAttribute('dir', spec.direction || source.getAttribute('dir') || 'auto');
+                                line.textContent = value;
+                                wrapper.appendChild(line);
+                            });
+                            source.style.setProperty('visibility', 'hidden', 'important');
+                            source.insertAdjacentElement('afterend', wrapper);
+                        });
+
+                        document.querySelectorAll('[data-ziad-print-field="1"]:not(input[type="checkbox"])').forEach((element) => {
+                            element.style.setProperty('font-size', exactFont, 'important');
                         });
                     }""",
-                    HTML_DATA_MIN_FONT_PX,
+                    {"fontPt": HTML_DATA_FONT_PT, "fontPx": HTML_DATA_FONT_PX, "specs": print_specs},
                 )
                 root = page.locator(root_selector).first
                 if root.count() != 1:

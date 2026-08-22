@@ -4,8 +4,8 @@ const root = document.getElementById('app');
 const modalRoot = document.getElementById('modal-root');
 const toastRoot = document.getElementById('toast-root');
 
-const TEMPLATE_DATA_MIN_FONT_PT = 16;
-const TEMPLATE_DATA_MIN_FONT_PX = TEMPLATE_DATA_MIN_FONT_PT * 96 / 72;
+const TEMPLATE_DATA_FONT_PT = 16;
+const TEMPLATE_DATA_FONT_PX = TEMPLATE_DATA_FONT_PT * 96 / 72;
 
 const state = {
   token: localStorage.getItem('ziad_token') || '',
@@ -305,7 +305,7 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
       <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-head">
-          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.18</span></div></div>
+          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.19</span></div></div>
           <button id="sidebar-close" class="btn btn-icon btn-link sidebar-close" aria-label="إغلاق القائمة">${icon('close')}</button>
         </div>
         <nav class="sidebar-nav">
@@ -747,6 +747,96 @@ function getHtmlElementValue(element, fieldType) {
   return element.textContent || '';
 }
 
+function htmlFieldLineCount(field, selectors = []) {
+  const configured = Array.isArray(field.line_boxes) && field.line_boxes.length
+    ? field.line_boxes.length
+    : (Array.isArray(field.line_positions) ? field.line_positions.length : 0);
+  return Math.max(Number(field.line_count || 0), configured, selectors.length > 1 ? selectors.length : 0);
+}
+
+function isHtmlLineField(field, element, selectors = []) {
+  if (field.html_line === true) return true;
+  if (field.html_line === false) return false;
+  if (htmlFieldLineCount(field, selectors) > 1) return true;
+  return Boolean(element?.matches?.('.line,.line-field,.field-received_from,.field-about,.field-written,.field-receiver') || element?.closest?.('.top-field,.signature'));
+}
+
+function removeHtmlSplitEditor(frameDoc, fieldKey) {
+  frameDoc.querySelectorAll(`.ziad-split-lines[data-ziad-split-for="${CSS.escape(String(fieldKey))}"]`).forEach(node => node.remove());
+}
+
+function installHtmlSplitLineEditor(frameDoc, element, field, rawValue, locked, lineCount) {
+  if (!element || !element.matches('textarea') || lineCount <= 1) return false;
+  removeHtmlSplitEditor(frameDoc, field.key);
+
+  const computed = frameDoc.defaultView?.getComputedStyle(element);
+  const wrapper = frameDoc.createElement('div');
+  wrapper.className = 'ziad-split-lines';
+  wrapper.dataset.ziadSplitFor = field.key;
+  wrapper.style.setProperty('--ziad-line-count', String(lineCount));
+  wrapper.style.left = element.style.left || computed?.left || '0';
+  wrapper.style.top = element.style.top || computed?.top || '0';
+  wrapper.style.width = element.style.width || computed?.width || '100%';
+  wrapper.style.height = element.style.height || computed?.height || '100%';
+  wrapper.style.direction = field.direction || element.getAttribute('dir') || computed?.direction || 'rtl';
+  wrapper.style.textAlign = field.align || computed?.textAlign || 'right';
+  const transform = computed?.transform;
+  if (transform && transform !== 'none') wrapper.style.transform = transform;
+  wrapper.style.transformOrigin = computed?.transformOrigin || 'center center';
+
+  const parts = String(rawValue || '').replace(/\r\n?/g, '\n').split('\n');
+  const values = (parts.length > lineCount
+    ? [...parts.slice(0, lineCount - 1), parts.slice(lineCount - 1).join(' ')]
+    : parts.concat(Array(Math.max(0, lineCount - parts.length)).fill(''))
+  ).slice(0, lineCount);
+
+  const sync = () => {
+    const lines = [...wrapper.querySelectorAll('.ziad-split-line')].map(line => (line.textContent || '').replace(/[\r\n]+/g, ' ').trimEnd());
+    element.value = lines.join('\n');
+    state.dirty = true;
+  };
+
+  values.forEach((value, index) => {
+    const line = frameDoc.createElement('div');
+    line.className = 'ziad-split-line';
+    line.dataset.ziadField = '1';
+    line.dataset.ziadFieldKey = field.key;
+    line.dataset.ziadLineField = '1';
+    line.dataset.ziadLineIndex = String(index);
+    line.dataset.ziadViewonly = locked ? '1' : '0';
+    line.setAttribute('dir', field.direction || element.getAttribute('dir') || 'auto');
+    line.setAttribute('spellcheck', 'false');
+    line.setAttribute('contenteditable', locked ? 'false' : 'true');
+    line.textContent = value || '';
+    if (!locked) {
+      line.addEventListener('input', sync);
+      line.addEventListener('keydown', event => {
+        const lines = [...wrapper.querySelectorAll('.ziad-split-line')];
+        if (event.key === 'Enter' || event.key === 'ArrowDown') { event.preventDefault(); lines[index + 1]?.focus(); }
+        else if (event.key === 'ArrowUp') { event.preventDefault(); lines[index - 1]?.focus(); }
+        else if (event.key === 'Backspace' && !line.textContent && index > 0) lines[index - 1]?.focus();
+      });
+      line.addEventListener('paste', event => {
+        const pasted = event.clipboardData?.getData('text') || '';
+        if (!/[\r\n]/.test(pasted)) return;
+        event.preventDefault();
+        const pastedLines = pasted.replace(/\r\n?/g, '\n').split('\n');
+        const lines = [...wrapper.querySelectorAll('.ziad-split-line')];
+        pastedLines.forEach((part, offset) => { if (lines[index + offset]) lines[index + offset].textContent = part; });
+        sync();
+        lines[Math.min(index + pastedLines.length, lines.length - 1)]?.focus();
+      });
+    }
+    wrapper.appendChild(line);
+  });
+
+  element.dataset.ziadSplitSource = '1';
+  element.style.setProperty('visibility', 'hidden', 'important');
+  element.style.setProperty('pointer-events', 'none', 'important');
+  element.insertAdjacentElement('afterend', wrapper);
+  return true;
+}
+
 function applyHtmlTemplateGuide(frame, visible) {
   const frameDoc = frame?.contentDocument;
   if (!frameDoc) return;
@@ -858,8 +948,14 @@ function configureHtmlTemplateFrame(frame, doc, viewOnly) {
     helperStyle.id = 'ziad-template-bridge-style';
     helperStyle.textContent = `
       [data-ziad-field="1"]{transition:outline .12s ease,background-color .12s ease;}
+      [data-ziad-field="1"]:not(input[type="checkbox"]){font-size:16pt!important;}
       html.ziad-field-guide [data-ziad-field="1"]{outline:1px dashed rgba(14,107,79,.62)!important;outline-offset:-1px;background-color:rgba(255,255,255,.18)!important;}
       [data-ziad-viewonly="1"]{pointer-events:none!important;opacity:1!important;color:#111!important;-webkit-text-fill-color:#111!important;}
+      [data-ziad-line-field="1"]{font-size:16pt!important;line-height:1!important;box-sizing:border-box!important;}
+      [contenteditable][data-ziad-line-field="1"]{display:flex!important;align-items:flex-end!important;padding-top:0!important;padding-bottom:.75mm!important;}
+      input[data-ziad-line-field="1"]{line-height:1!important;padding-top:0!important;padding-bottom:.55mm!important;transform:translateY(-.85mm)!important;}
+      .ziad-split-lines{position:absolute!important;z-index:12!important;display:grid!important;grid-template-rows:repeat(var(--ziad-line-count),minmax(0,1fr));overflow:visible!important;background:transparent!important;}
+      .ziad-split-line{min-width:0!important;min-height:0!important;display:flex!important;align-items:flex-end!important;white-space:nowrap!important;overflow:hidden!important;background:transparent!important;border:0!important;outline:0!important;font-family:Arial,Tahoma,"Segoe UI",sans-serif!important;font-size:16pt!important;font-weight:600!important;line-height:1!important;padding:0 .42em .55mm!important;box-sizing:border-box!important;}
       [data-ziad-template-root="1"]{transform:scale(var(--ziad-template-scale,1))!important;transform-origin:top left!important;margin:0!important;}
     `;
     frameDoc.head.appendChild(helperStyle);
@@ -890,10 +986,11 @@ function configureHtmlTemplateFrame(frame, doc, viewOnly) {
       if (!element) return;
       element.dataset.ziadField = '1';
       element.dataset.ziadFieldKey = field.key;
-      const computedFontPx = parseFloat(frameDoc.defaultView?.getComputedStyle(element).fontSize || '0');
-      if (Number.isFinite(computedFontPx) && computedFontPx < TEMPLATE_DATA_MIN_FONT_PX) {
-        element.style.setProperty('font-size', `${TEMPLATE_DATA_MIN_FONT_PT}pt`, 'important');
+      if (!(field.type === 'checkbox' || element.type === 'checkbox')) {
+        element.style.setProperty('font-size', `${TEMPLATE_DATA_FONT_PT}pt`, 'important');
       }
+      const isLine = isHtmlLineField(field, element, selectors);
+      element.dataset.ziadLineField = isLine ? '1' : '0';
       setHtmlElementValue(element, lineValues[index] ?? '', field.type);
       const locked = viewOnly || field.readonly || field.html_readonly;
       if (element.matches('input, textarea')) {
@@ -908,6 +1005,12 @@ function configureHtmlTemplateFrame(frame, doc, viewOnly) {
         element.addEventListener('change', () => { state.dirty = true; });
       }
     });
+    const lineCount = htmlFieldLineCount(field, selectors);
+    if (selectors.length === 1 && lineCount > 1 && field.html_line === true) {
+      const source = frameDoc.querySelector(selectors[0]);
+      const locked = viewOnly || field.readonly || field.html_readonly;
+      installHtmlSplitLineEditor(frameDoc, source, field, rawValue, locked, lineCount);
+    }
     if (!viewOnly && selectors.length > 1) {
       selectors.forEach((selector, index) => {
         const nextSelector = selectors[index + 1];
@@ -959,7 +1062,7 @@ async function renderDocumentEditor(id, mode) {
   const useHtmlTemplate = doc.type.config.template_engine === 'html' && Boolean(doc.type.config.html_template);
   const fields = useHtmlTemplate ? '' : doc.type.config.fields.map(field => fieldHtml(field, doc.fields[field.key], viewOnly)).join('');
   const templateMarkup = useHtmlTemplate
-    ? `<iframe id="template-frame" class="html-template-frame" src="/form-templates/${encodeURIComponent(doc.type.config.html_template)}?v=3.3.18" title="${escapeHtml(doc.type.name_ar)}"></iframe>`
+    ? `<iframe id="template-frame" class="html-template-frame" src="/form-templates/${encodeURIComponent(doc.type.config.html_template)}?v=3.3.19" title="${escapeHtml(doc.type.name_ar)}"></iframe>`
     : `<img class="template-bg" src="${doc.type.image_url}" alt="${escapeHtml(doc.type.name_ar)}">${fields}`;
   const attachments = attachmentsHtml(doc.attachments || [], viewOnly);
   const primaryAction = viewOnly ? (state.user.role !== 'viewer' ? `<button id="edit-document" class="btn btn-primary">${icon('edit')} تعديل</button>` : '') : `<select id="document-status" class="control compact status-control"><option value="saved" ${doc.status === 'saved' ? 'selected' : ''}>محفوظ</option><option value="draft" ${doc.status === 'draft' ? 'selected' : ''}>مسودة</option></select><button id="save-document" class="btn btn-primary">${icon('save')} حفظ</button>`;

@@ -48,7 +48,8 @@
         "direction": "rtl",
         "min_font_size": 9,
         "font_weight": "normal",
-        "html_selector": "[data-key=\"received_from\"]"
+        "html_selector": "[data-key=\"received_from\"]",
+        "html_line": true
       },
       {
         "key": "receivable_type",
@@ -126,7 +127,8 @@
             "h": 2.25
           }
         ],
-        "html_selector": "[data-key=\"about\"]"
+        "html_selector": "[data-key=\"about\"]",
+        "html_line": true
       },
       {
         "key": "amount",
@@ -183,7 +185,8 @@
             "h": 2.25
           }
         ],
-        "html_selector": "[data-key=\"written\"]"
+        "html_selector": "[data-key=\"written\"]",
+        "html_line": true
       },
       {
         "key": "receiver_name",
@@ -198,7 +201,8 @@
         "direction": "rtl",
         "min_font_size": 9,
         "font_weight": "normal",
-        "html_selector": "[data-key=\"receiver\"]"
+        "html_selector": "[data-key=\"receiver\"]",
+        "html_line": true
       }
     ],
     "pdf": "receipt-voucher.pdf",
@@ -270,7 +274,8 @@
         "direction": "rtl",
         "min_font_size": 9,
         "font_weight": "normal",
-        "html_selector": "[data-save=\"requester\"]"
+        "html_selector": "[data-save=\"requester\"]",
+        "html_line": true
       },
       {
         "key": "department",
@@ -285,7 +290,8 @@
         "direction": "rtl",
         "min_font_size": 9,
         "font_weight": "normal",
-        "html_selector": "[data-save=\"department\"]"
+        "html_selector": "[data-save=\"department\"]",
+        "html_line": true
       },
       {
         "key": "pay_to",
@@ -300,7 +306,8 @@
         "direction": "rtl",
         "min_font_size": 9,
         "font_weight": "normal",
-        "html_selector": "[data-save=\"pay_to\"]"
+        "html_selector": "[data-save=\"pay_to\"]",
+        "html_line": true
       },
       {
         "key": "purpose",
@@ -339,7 +346,8 @@
         "html_selectors": [
           "[data-save=\"purpose_1\"]",
           "[data-save=\"purpose_2\"]"
-        ]
+        ],
+        "html_line": true
       },
       {
         "key": "payment_cash",
@@ -442,7 +450,8 @@
         "html_selectors": [
           "[data-save=\"written_amount_1\"]",
           "[data-save=\"written_amount_2\"]"
-        ]
+        ],
+        "html_line": true
       },
       {
         "key": "prepared_by",
@@ -457,7 +466,8 @@
         "direction": "rtl",
         "min_font_size": 8,
         "font_weight": "normal",
-        "html_selector": "[data-save=\"prepared_signature\"]"
+        "html_selector": "[data-save=\"prepared_signature\"]",
+        "html_line": true
       },
       {
         "key": "verified_by",
@@ -472,7 +482,8 @@
         "direction": "rtl",
         "min_font_size": 8,
         "font_weight": "normal",
-        "html_selector": "[data-save=\"manager_signature\"]"
+        "html_selector": "[data-save=\"manager_signature\"]",
+        "html_line": true
       },
       {
         "key": "approval",
@@ -487,7 +498,8 @@
         "direction": "rtl",
         "min_font_size": 8,
         "font_weight": "normal",
-        "html_selector": "[data-save=\"approval_signature\"]"
+        "html_selector": "[data-save=\"approval_signature\"]",
+        "html_line": true
       }
     ],
     "pdf": "payment-request.pdf",
@@ -573,7 +585,8 @@
         "direction": "rtl",
         "min_font_size": 9,
         "font_weight": "normal",
-        "html_selector": "#payto"
+        "html_selector": "#payto",
+        "html_line": true
       },
       {
         "key": "purpose",
@@ -616,7 +629,8 @@
             "h": 2.25
           }
         ],
-        "html_selector": "#purpose"
+        "html_selector": "#purpose",
+        "html_line": true
       },
       {
         "key": "amount",
@@ -687,7 +701,8 @@
             "h": 2.25
           }
         ],
-        "html_selector": "#written"
+        "html_selector": "#written",
+        "html_line": true
       },
       {
         "key": "receiver_name",
@@ -702,7 +717,8 @@
         "direction": "rtl",
         "min_font_size": 8,
         "font_weight": "normal",
-        "html_selector": "#receiver"
+        "html_selector": "#receiver",
+        "html_line": true
       },
       {
         "key": "accountant",
@@ -717,7 +733,8 @@
         "direction": "rtl",
         "min_font_size": 8,
         "font_weight": "normal",
-        "html_selector": "#accountant"
+        "html_selector": "#accountant",
+        "html_line": true
       },
       {
         "key": "approval",
@@ -732,7 +749,8 @@
         "direction": "rtl",
         "min_font_size": 8,
         "font_weight": "normal",
-        "html_selector": "#approval"
+        "html_selector": "#approval",
+        "html_line": true
       }
     ],
     "pdf": "payment-voucher.pdf",
@@ -765,7 +783,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 9,
-        "html_selector": "[aria-label=\"السيارة\"]"
+        "html_selector": "[aria-label=\"السيارة\"]",
+        "html_line": true
       },
       {
         "key": "vehicle_number",
@@ -779,7 +798,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 9,
-        "html_selector": "[aria-label=\"رقم السيارة\"]"
+        "html_selector": "[aria-label=\"رقم السيارة\"]",
+        "html_line": true
       },
       {
         "key": "maintenance_date",
@@ -793,7 +813,8 @@
         "align": "right",
         "direction": "ltr",
         "min_font_size": 9,
-        "html_selector": "[aria-label=\"تاريخ الصيانة\"]"
+        "html_selector": "[aria-label=\"تاريخ الصيانة\"]",
+        "html_line": true
       },
       {
         "key": "received_amount",
@@ -807,7 +828,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 9,
-        "html_selector": "[aria-label=\"المبلغ المستلم لغرض الصيانة\"]"
+        "html_selector": "[aria-label=\"المبلغ المستلم لغرض الصيانة\"]",
+        "html_line": true
       },
       {
         "key": "fault_1",
@@ -1569,7 +1591,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 8,
-        "html_selector": "[aria-label=\"السائق\"]"
+        "html_selector": "[aria-label=\"السائق\"]",
+        "html_line": true
       },
       {
         "key": "executive_manager",
@@ -1583,7 +1606,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 8,
-        "html_selector": "[aria-label=\"المدير التنفيذي\"]"
+        "html_selector": "[aria-label=\"المدير التنفيذي\"]",
+        "html_line": true
       },
       {
         "key": "line_manager",
@@ -1597,7 +1621,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 8,
-        "html_selector": "[aria-label=\"المدير المباشر\"]"
+        "html_selector": "[aria-label=\"المدير المباشر\"]",
+        "html_line": true
       },
       {
         "key": "accounts_manager",
@@ -1611,7 +1636,8 @@
         "align": "right",
         "direction": "rtl",
         "min_font_size": 8,
-        "html_selector": "[aria-label=\"مدير الحسابات\"]"
+        "html_selector": "[aria-label=\"مدير الحسابات\"]",
+        "html_line": true
       },
       {
         "key": "maintenance_total_notes",
@@ -1703,14 +1729,16 @@
         "label_ar": "القسم",
         "type": "text",
         "direction": "rtl",
-        "html_selector": "[data-field=\"department\"]"
+        "html_selector": "[data-field=\"department\"]",
+        "html_line": true
       },
       {
         "key": "pay_to",
         "label_ar": "الدفع إلى",
         "type": "text",
         "direction": "rtl",
-        "html_selector": "[data-field=\"payto\"]"
+        "html_selector": "[data-field=\"payto\"]",
+        "html_line": true
       },
       {
         "key": "purpose",
@@ -1722,7 +1750,8 @@
         "html_selectors": [
           "[data-field=\"purpose1\"]",
           "[data-field=\"purpose2\"]"
-        ]
+        ],
+        "html_line": true
       },
       {
         "key": "transfer_entity",
@@ -1755,28 +1784,32 @@
         "html_selectors": [
           "[data-field=\"written1\"]",
           "[data-field=\"written2\"]"
-        ]
+        ],
+        "html_line": true
       },
       {
         "key": "prepared_by",
         "label_ar": "اسم مقدم الصرف",
         "type": "text",
         "direction": "rtl",
-        "html_selector": "[data-field=\"prepared\"]"
+        "html_selector": "[data-field=\"prepared\"]",
+        "html_line": true
       },
       {
         "key": "accounts",
         "label_ar": "الحسابات",
         "type": "text",
         "direction": "rtl",
-        "html_selector": "[data-field=\"accounts\"]"
+        "html_selector": "[data-field=\"accounts\"]",
+        "html_line": true
       },
       {
         "key": "approval",
         "label_ar": "الموافقة",
         "type": "text",
         "direction": "rtl",
-        "html_selector": "[data-field=\"approval\"]"
+        "html_selector": "[data-field=\"approval\"]",
+        "html_line": true
       }
     ],
     "template_engine": "html",

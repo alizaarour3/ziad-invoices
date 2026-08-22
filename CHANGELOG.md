@@ -1,12 +1,10 @@
-# v3.3.18 - No Login Lockout & Print 5xx Recovery
+# v3.3.19 - Exact 16pt Line Alignment
 
-- Removed automatic account lockout after repeated failed logins while keeping failed-login audit events.
-- Stale `locked_until` values from older versions no longer block a valid password and are cleared automatically.
-- Added print-engine diagnostics for Chromium, Playwright, and BeautifulSoup.
-- Hardened A4 print generation and validates generated PDF dimensions before delivery.
-- Added calibrated PDF-overlay fallback for RV / PR / PV / VM when exact HTML browser rendering fails.
-- Print failures are logged server-side and surfaced as a clear HTTP 503 instead of an opaque 5xx error.
-- No database migration and no official HTML template modifications.
+- User-entered document data is exactly 16pt in the HTML editor and Chromium print path.
+- Ruled fields are bottom-anchored so text sits directly above the printed line.
+- RV/PV multiline ruled areas are split into runtime per-line editors/print layers for reliable baseline placement.
+- No official HTML template file was modified.
+- No database migration is required.
 - Automated test suite: 17/17 passed.
 
 # v3.3.17 - Invoice Data Font 16pt & Advances

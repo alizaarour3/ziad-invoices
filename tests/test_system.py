@@ -225,7 +225,7 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.18'
+        assert status_data['version'] == '3.3.19'
         assert status_data['database']['ok'] is True
         assert status_data['printing']['ready'] is True
         assert status_data['printing']['chromium'] is True
@@ -249,7 +249,7 @@ def test_system_status_and_backup():
             assert 'app/static/form-templates/receipt-voucher.html' in names
             assert 'app/static/form-templates/request-transfer.html' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.18'
+            assert manifest['version'] == '3.3.19'
             assert manifest['files']
 
 
@@ -276,7 +276,7 @@ def test_failed_login_attempts_never_lock_account_and_password_change():
             response = client.post('/api/auth/login', json={'username':'admin','password':'wrong-password'})
             assert response.status_code == 401
 
-        # v3.3.18 explicitly removes automatic account lockout. Even a stale
+        # v3.3.19 explicitly removes automatic account lockout. Even a stale
         # locked_until value left by an older release must not block a valid login.
         from app.db import connect
         conn = connect()
@@ -644,16 +644,22 @@ def test_advances_lifecycle_payments_and_permissions():
         assert client.get(f"/api/advances/{advance['id']}", headers=headers).status_code == 404
 
 
-def test_v3317_invoice_font_and_advances_ui_contract():
+def test_v3319_exact_16pt_line_alignment_and_advances_ui_contract():
+    import json
     project = Path(__file__).resolve().parents[1]
     javascript = (project / 'app' / 'static' / 'app.js').read_text(encoding='utf-8')
     pdf_service = (project / 'app' / 'services' / 'pdf_service.py').read_text(encoding='utf-8')
     stylesheet = (project / 'app' / 'static' / 'styles.css').read_text(encoding='utf-8')
+    templates = json.loads((project / 'config' / 'templates.json').read_text(encoding='utf-8'))
 
-    assert 'TEMPLATE_DATA_MIN_FONT_PT = 16' in javascript
-    assert "element.style.setProperty('font-size', `${TEMPLATE_DATA_MIN_FONT_PT}pt`, 'important')" in javascript
-    assert 'HTML_DATA_MIN_FONT_PT = 16' in pdf_service
-    assert "element.style.setProperty('font-size', '16pt', 'important')" in pdf_service
+    assert 'TEMPLATE_DATA_FONT_PT = 16' in javascript
+    assert "element.style.setProperty('font-size', `${TEMPLATE_DATA_FONT_PT}pt`, 'important')" in javascript
+    assert 'installHtmlSplitLineEditor' in javascript
+    assert 'data-ziad-line-field' in javascript
+    assert 'HTML_DATA_FONT_PT = 16' in pdf_service
+    assert 'ziad-print-split-lines' in pdf_service
+    assert 'font-size:16pt !important' in pdf_service
+    assert all(any(field.get('html_line') for field in templates[code]['fields']) for code in ('RV','PR','PV','VM','TR'))
     assert "renderAdvances" in javascript
     assert "renderAdvanceDetails" in javascript
     assert "renderAdvanceReport" in javascript
