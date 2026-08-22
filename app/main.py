@@ -26,6 +26,9 @@ from fastapi.staticfiles import StaticFiles
 from .auth import CurrentUser, authenticate, get_bearer_token, get_current_user, logout, require
 from .db import DBConnection, Record, audit, connect, ensure_user_page_permissions, init_db, transaction
 from .schemas import (
+    AdvanceCreateRequest,
+    AdvancePaymentCreateRequest,
+    AdvanceUpdateRequest,
     AttachmentNotesRequest,
     ChangePasswordRequest,
     DeleteRequest,
@@ -102,7 +105,9 @@ async def validation_error_handler(_: Request, exc: RequestValidationError):
         "months_total": "عدد أشهر التسديد",
         "minimum_payment": "الحد الأدنى للتسديد",
         "amount": "مبلغ التسديد",
-        "notes": "ملاحظات التسديد",
+        "notes": "الملاحظات",
+        "person_name": "الاسم الثلاثي",
+        "advance_month": "الشهر",
     }
     label = field_labels.get(field_key, field_key)
     detail = "البيانات المدخلة غير صحيحة"
@@ -220,10 +225,70 @@ JOIN users creator ON creator.id=l.created_by
 JOIN users updater ON updater.id=l.updated_by
 """
 
+
+def _advance_page_access(conn: DBConnection, user: CurrentUser) -> None:
+    _require_page_access(conn, user, "advances")
+
+
+def _advance_dict(conn: DBConnection, row: Record, *, include_payments: bool = False) -> dict[str, Any]:
+    payment_count = int(row["payment_count"]) if "payment_count" in row.keys() else int(
+        conn.execute("SELECT COUNT(*) AS count FROM advance_payments WHERE advance_id=?", (row["id"],)).fetchone()["count"]
+    )
+    paid_minor = int(row["amount_minor"]) - int(row["remaining_amount_minor"])
+    result: dict[str, Any] = {
+        "id": int(row["id"]),
+        "person_name": row["person_name"],
+        "amount": _minor_to_money(int(row["amount_minor"])),
+        "notes": row["notes"],
+        "advance_month": row["advance_month"],
+        "remaining_amount": _minor_to_money(int(row["remaining_amount_minor"])),
+        "paid_amount": _minor_to_money(paid_minor),
+        "payment_count": payment_count,
+        "status": "paid" if int(row["remaining_amount_minor"]) == 0 else "active",
+        "created_by": int(row["created_by"]),
+        "created_by_name": row["created_by_name"] if "created_by_name" in row.keys() else None,
+        "updated_by": int(row["updated_by"]),
+        "updated_by_name": row["updated_by_name"] if "updated_by_name" in row.keys() else None,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+    if include_payments:
+        payments = conn.execute(
+            """
+            SELECT p.*, u.full_name AS paid_by_name
+            FROM advance_payments p JOIN users u ON u.id=p.paid_by
+            WHERE p.advance_id=? ORDER BY p.id DESC
+            """,
+            (row["id"],),
+        ).fetchall()
+        result["payments"] = [
+            {
+                "id": int(item["id"]),
+                "amount": _minor_to_money(int(item["amount_minor"])),
+                "remaining_amount_after": _minor_to_money(int(item["remaining_amount_minor_after"])),
+                "notes": item["notes"],
+                "paid_by": int(item["paid_by"]),
+                "paid_by_name": item["paid_by_name"],
+                "paid_at": item["paid_at"],
+            }
+            for item in payments
+        ]
+    return result
+
+
+ADVANCE_SELECT = """
+SELECT a.*, creator.full_name AS created_by_name, updater.full_name AS updated_by_name,
+       (SELECT COUNT(*) FROM advance_payments p WHERE p.advance_id=a.id) AS payment_count
+FROM advances a
+JOIN users creator ON creator.id=a.created_by
+JOIN users updater ON updater.id=a.updated_by
+"""
+
 def _managed_pages(conn: DBConnection) -> list[dict[str, str]]:
     pages: list[dict[str, str]] = [
         {"key": "dashboard", "name_ar": "الداشبورد", "category": "عام"},
         {"key": "loans", "name_ar": "قروض", "category": "المالية"},
+        {"key": "advances", "name_ar": "سلف", "category": "المالية"},
     ]
     rows = conn.execute("SELECT code, name_ar FROM document_types WHERE is_active=1 ORDER BY id").fetchall()
     pages.extend(
@@ -1380,6 +1445,207 @@ def delete_loan_permanent(
         return {"ok": True}
     finally:
         conn.close()
+
+
+@app.get("/api/advances")
+def list_advances(
+    user: Annotated[CurrentUser, Depends(require("documents.read"))],
+    q: str = Query(default="", max_length=160),
+    status: str | None = Query(default=None, pattern=r"^(active|paid)$"),
+):
+    conn = connect()
+    try:
+        _advance_page_access(conn, user)
+        where: list[str] = []
+        params: list[Any] = []
+        if q.strip():
+            where.append("(a.person_name LIKE ? OR a.notes LIKE ? OR a.advance_month LIKE ?)")
+            term = f"%{q.strip()}%"
+            params.extend([term, term, term])
+        if status == "active":
+            where.append("a.remaining_amount_minor > 0")
+        elif status == "paid":
+            where.append("a.remaining_amount_minor = 0")
+        sql = ADVANCE_SELECT
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY a.advance_month DESC, a.updated_at DESC, a.id DESC"
+        rows = conn.execute(sql, params).fetchall()
+        return [_advance_dict(conn, row) for row in rows]
+    finally:
+        conn.close()
+
+
+@app.post("/api/advances", status_code=201)
+def create_advance(
+    payload: AdvanceCreateRequest,
+    user: Annotated[CurrentUser, Depends(require("documents.create"))],
+):
+    conn = connect()
+    try:
+        _advance_page_access(conn, user)
+        amount = _money_to_minor(payload.amount)
+        now = utc_iso()
+        with transaction(conn, immediate=True):
+            cursor = conn.execute(
+                """
+                INSERT INTO advances(person_name, amount_minor, notes, advance_month, remaining_amount_minor,
+                                     created_by, updated_by, created_at, updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?)
+                """,
+                (payload.person_name, amount, payload.notes.strip(), payload.advance_month, amount, user.id, user.id, now, now),
+            )
+            advance_id = int(cursor.lastrowid)
+            audit(
+                conn,
+                user_id=user.id,
+                action="advance.create",
+                entity_type="advance",
+                entity_id=advance_id,
+                details={"person_name": payload.person_name, "amount": _minor_to_money(amount), "month": payload.advance_month},
+            )
+        row = conn.execute(ADVANCE_SELECT + " WHERE a.id=?", (advance_id,)).fetchone()
+        return _advance_dict(conn, row, include_payments=True)
+    finally:
+        conn.close()
+
+
+@app.get("/api/advances/{advance_id}")
+def get_advance(
+    advance_id: int,
+    user: Annotated[CurrentUser, Depends(require("documents.read"))],
+):
+    conn = connect()
+    try:
+        _advance_page_access(conn, user)
+        row = conn.execute(ADVANCE_SELECT + " WHERE a.id=?", (advance_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="السلفة غير موجودة")
+        return _advance_dict(conn, row, include_payments=True)
+    finally:
+        conn.close()
+
+
+@app.put("/api/advances/{advance_id}")
+def update_advance(
+    advance_id: int,
+    payload: AdvanceUpdateRequest,
+    user: Annotated[CurrentUser, Depends(require("documents.update"))],
+):
+    conn = connect()
+    try:
+        _advance_page_access(conn, user)
+        amount = _money_to_minor(payload.amount)
+        with transaction(conn, immediate=True):
+            lock_sql = "SELECT * FROM advances WHERE id=?" + (" FOR UPDATE" if conn.is_postgres else "")
+            current = conn.execute(lock_sql, (advance_id,)).fetchone()
+            if not current:
+                raise HTTPException(status_code=404, detail="السلفة غير موجودة")
+            payment_stats = conn.execute(
+                "SELECT COALESCE(SUM(amount_minor),0) AS paid FROM advance_payments WHERE advance_id=?",
+                (advance_id,),
+            ).fetchone()
+            paid_minor = int(payment_stats["paid"] or 0)
+            if amount < paid_minor:
+                raise HTTPException(status_code=422, detail="مبلغ السلفة الجديد لا يمكن أن يكون أقل من المبلغ المسدد")
+            remaining = amount - paid_minor
+            now = utc_iso()
+            conn.execute(
+                """
+                UPDATE advances SET person_name=?, amount_minor=?, notes=?, advance_month=?,
+                                    remaining_amount_minor=?, updated_by=?, updated_at=? WHERE id=?
+                """,
+                (payload.person_name, amount, payload.notes.strip(), payload.advance_month, remaining, user.id, now, advance_id),
+            )
+            audit(
+                conn,
+                user_id=user.id,
+                action="advance.update",
+                entity_type="advance",
+                entity_id=advance_id,
+                details={"person_name": payload.person_name, "amount": _minor_to_money(amount), "month": payload.advance_month},
+            )
+        row = conn.execute(ADVANCE_SELECT + " WHERE a.id=?", (advance_id,)).fetchone()
+        return _advance_dict(conn, row, include_payments=True)
+    finally:
+        conn.close()
+
+
+@app.post("/api/advances/{advance_id}/payments", status_code=201)
+def create_advance_payment(
+    advance_id: int,
+    payload: AdvancePaymentCreateRequest,
+    user: Annotated[CurrentUser, Depends(require("documents.update"))],
+):
+    conn = connect()
+    try:
+        _advance_page_access(conn, user)
+        amount = _money_to_minor(payload.amount)
+        with transaction(conn, immediate=True):
+            lock_sql = "SELECT * FROM advances WHERE id=?" + (" FOR UPDATE" if conn.is_postgres else "")
+            advance = conn.execute(lock_sql, (advance_id,)).fetchone()
+            if not advance:
+                raise HTTPException(status_code=404, detail="السلفة غير موجودة")
+            remaining = int(advance["remaining_amount_minor"])
+            if remaining <= 0:
+                raise HTTPException(status_code=409, detail="تم تسديد هذه السلفة بالكامل")
+            if amount > remaining:
+                raise HTTPException(status_code=422, detail="مبلغ التسديد أكبر من المبلغ المتبقي")
+            remaining_after = remaining - amount
+            now = utc_iso()
+            conn.execute(
+                """
+                INSERT INTO advance_payments(advance_id, amount_minor, remaining_amount_minor_after, notes, paid_by, paid_at)
+                VALUES(?,?,?,?,?,?)
+                """,
+                (advance_id, amount, remaining_after, payload.notes.strip(), user.id, now),
+            )
+            conn.execute(
+                "UPDATE advances SET remaining_amount_minor=?, updated_by=?, updated_at=? WHERE id=?",
+                (remaining_after, user.id, now, advance_id),
+            )
+            audit(
+                conn,
+                user_id=user.id,
+                action="advance.payment",
+                entity_type="advance",
+                entity_id=advance_id,
+                details={"amount": _minor_to_money(amount), "remaining": _minor_to_money(remaining_after)},
+            )
+        row = conn.execute(ADVANCE_SELECT + " WHERE a.id=?", (advance_id,)).fetchone()
+        return _advance_dict(conn, row, include_payments=True)
+    finally:
+        conn.close()
+
+
+@app.delete("/api/advances/{advance_id}/permanent")
+def delete_advance_permanent(
+    advance_id: int,
+    payload: DeleteRequest,
+    user: Annotated[CurrentUser, Depends(require("documents.delete"))],
+):
+    if payload.confirmation.strip() != "حذف نهائي":
+        raise HTTPException(status_code=422, detail="عبارة التأكيد غير صحيحة")
+    conn = connect()
+    try:
+        _advance_page_access(conn, user)
+        with transaction(conn, immediate=True):
+            row = conn.execute("SELECT * FROM advances WHERE id=?", (advance_id,)).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="السلفة غير موجودة")
+            audit(
+                conn,
+                user_id=user.id,
+                action="advance.delete_permanent",
+                entity_type="advance",
+                entity_id=advance_id,
+                details={"person_name": row["person_name"], "amount": _minor_to_money(int(row["amount_minor"]))},
+            )
+            conn.execute("DELETE FROM advances WHERE id=?", (advance_id,))
+        return {"ok": True}
+    finally:
+        conn.close()
+
 
 @app.get("/api/users")
 def list_users(_: Annotated[CurrentUser, Depends(require("users.manage"))]):

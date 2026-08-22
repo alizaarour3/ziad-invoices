@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover - exercised only when PostgreSQL is requ
     psycopg = None
     dict_row = None
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 INTEGRITY_ERRORS: tuple[type[BaseException], ...] = (sqlite3.IntegrityError,)
 if psycopg is not None:
@@ -32,6 +32,8 @@ _POSTGRES_ID_TABLES = {
     "audit_logs",
     "loans",
     "loan_payments",
+    "advances",
+    "advance_payments",
 }
 
 
@@ -304,6 +306,35 @@ CREATE TABLE IF NOT EXISTS loan_payments (
 CREATE INDEX IF NOT EXISTS idx_loan_payments_loan ON loan_payments(loan_id, id);
 CREATE INDEX IF NOT EXISTS idx_loan_payments_paid_at ON loan_payments(paid_at DESC);
 
+CREATE TABLE IF NOT EXISTS advances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_name TEXT NOT NULL,
+    amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+    notes TEXT NOT NULL DEFAULT '',
+    advance_month TEXT NOT NULL,
+    remaining_amount_minor INTEGER NOT NULL CHECK (remaining_amount_minor >= 0),
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    updated_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_advances_person_name ON advances(person_name);
+CREATE INDEX IF NOT EXISTS idx_advances_month ON advances(advance_month);
+CREATE INDEX IF NOT EXISTS idx_advances_remaining ON advances(remaining_amount_minor);
+CREATE INDEX IF NOT EXISTS idx_advances_updated_at ON advances(updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS advance_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    advance_id INTEGER NOT NULL REFERENCES advances(id) ON DELETE CASCADE,
+    amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+    remaining_amount_minor_after INTEGER NOT NULL CHECK (remaining_amount_minor_after >= 0),
+    notes TEXT NOT NULL DEFAULT '',
+    paid_by INTEGER NOT NULL REFERENCES users(id),
+    paid_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_advance_payments_advance ON advance_payments(advance_id, id);
+CREATE INDEX IF NOT EXISTS idx_advance_payments_paid_at ON advance_payments(paid_at DESC);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -440,6 +471,33 @@ POSTGRES_SCHEMA_STATEMENTS = [
     )""",
     "CREATE INDEX IF NOT EXISTS idx_loan_payments_loan ON loan_payments(loan_id, id)",
     "CREATE INDEX IF NOT EXISTS idx_loan_payments_paid_at ON loan_payments(paid_at DESC)",
+    """CREATE TABLE IF NOT EXISTS advances (
+        id BIGSERIAL PRIMARY KEY,
+        person_name TEXT NOT NULL,
+        amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
+        notes TEXT NOT NULL DEFAULT '',
+        advance_month TEXT NOT NULL,
+        remaining_amount_minor BIGINT NOT NULL CHECK (remaining_amount_minor >= 0),
+        created_by BIGINT NOT NULL REFERENCES users(id),
+        updated_by BIGINT NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_advances_person_name ON advances(person_name)",
+    "CREATE INDEX IF NOT EXISTS idx_advances_month ON advances(advance_month)",
+    "CREATE INDEX IF NOT EXISTS idx_advances_remaining ON advances(remaining_amount_minor)",
+    "CREATE INDEX IF NOT EXISTS idx_advances_updated_at ON advances(updated_at DESC)",
+    """CREATE TABLE IF NOT EXISTS advance_payments (
+        id BIGSERIAL PRIMARY KEY,
+        advance_id BIGINT NOT NULL REFERENCES advances(id) ON DELETE CASCADE,
+        amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
+        remaining_amount_minor_after BIGINT NOT NULL CHECK (remaining_amount_minor_after >= 0),
+        notes TEXT NOT NULL DEFAULT '',
+        paid_by BIGINT NOT NULL REFERENCES users(id),
+        paid_at TEXT NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_advance_payments_advance ON advance_payments(advance_id, id)",
+    "CREATE INDEX IF NOT EXISTS idx_advance_payments_paid_at ON advance_payments(paid_at DESC)",
     """CREATE TABLE IF NOT EXISTS audit_logs (
         id BIGSERIAL PRIMARY KEY,
         user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
@@ -471,6 +529,8 @@ SUPABASE_APP_TABLES = (
     "attachments",
     "loans",
     "loan_payments",
+    "advances",
+    "advance_payments",
     "audit_logs",
     "settings",
 )
@@ -577,7 +637,7 @@ def _sync_document_types(conn: DBConnection) -> None:
 
 def permission_page_keys(conn: DBConnection) -> list[str]:
     rows = conn.execute("SELECT code FROM document_types WHERE is_active=1 ORDER BY id").fetchall()
-    return ["dashboard", "loans", *[f"documents.{row['code']}" for row in rows]]
+    return ["dashboard", "loans", "advances", *[f"documents.{row['code']}" for row in rows]]
 
 
 def ensure_user_page_permissions(conn: DBConnection, user_id: int) -> None:

@@ -12,7 +12,7 @@ from ..db import connect
 from ..settings import BACKUPS_DIR, DATABASE_BACKEND, DB_PATH, PROJECT_DIR, TEMPLATES_DIR
 from .storage_service import storage
 
-APP_VERSION = "3.3.16"
+APP_VERSION = "3.3.17"
 
 
 def _sha256(path: Path) -> str:
@@ -93,6 +93,8 @@ def _postgres_json_export(destination: Path) -> None:
         "attachments",
         "loans",
         "loan_payments",
+        "advances",
+        "advance_payments",
         "audit_logs",
         "settings",
     ]

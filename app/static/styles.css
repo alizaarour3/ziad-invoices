@@ -767,3 +767,19 @@ a:focus-visible, button:focus-visible, .nav-item:focus-visible, .quick-card:focu
   .loan-report-paper{width:210mm;min-height:297mm;max-width:none;margin:0;padding:14mm;border:0;border-radius:0;box-shadow:none;background:#fff;color:#14231d}
   .loan-report-top{margin-top:0}.loan-report-history .table-wrap{overflow:visible}.loan-report-history table{font-size:10px}.loan-report-card{break-inside:avoid}.loan-report-meta{break-inside:avoid}
 }
+
+
+/* ---------- Advances / سلف v3.3.17 ---------- */
+.advance-create-panel{border-color:#d9e6df;background:linear-gradient(135deg,#fff,#f7faf8)}
+.advance-inline-form{grid-template-columns:1.15fr .75fr .75fr 1.35fr}
+.advance-inline-form .advance-notes-field{min-width:0}
+.advance-table{min-width:1120px}
+.advance-note-cell{max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12px}
+.advance-month-pill{display:inline-flex;align-items:center;min-height:28px;padding:5px 9px;border-radius:999px;background:#f4f1e7;color:#6e6250;font-size:11px;font-weight:800;white-space:nowrap}
+.advance-detail-notes,.advance-report-notes{margin:0 18px 18px;padding:14px 16px;border:1px solid var(--border);border-radius:13px;background:#fbfaf6}
+.advance-detail-notes span,.advance-report-notes span{display:block;color:var(--muted);font-size:11px;font-weight:800;margin-bottom:6px}
+.advance-detail-notes p,.advance-report-notes p{margin:0;line-height:1.9;white-space:pre-wrap}
+.advance-report-notes{margin:0 0 22px}
+@media(max-width:1100px){.advance-inline-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.advance-inline-form{grid-template-columns:1fr}}
+@media print{.advance-report-notes{break-inside:avoid}}

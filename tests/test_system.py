@@ -156,6 +156,7 @@ def test_users_and_permissions():
         assert me.status_code == 200
         assert "documents.TR" in me.json()["page_permissions"]
         assert "loans" in me.json()["page_permissions"]
+        assert "advances" in me.json()["page_permissions"]
         assert client.get("/api/documents", headers=viewer_headers).status_code == 200
         assert client.post("/api/documents", headers=viewer_headers, json={"type_code": "PR", "fields": {}}).status_code == 403
         assert client.get("/api/users", headers=viewer_headers).status_code == 403
@@ -169,7 +170,7 @@ def test_users_and_permissions():
         permissions = client.get("/api/permissions", headers=admin_headers)
         assert permissions.status_code == 200
         assert {page["key"] for page in permissions.json()["pages"]} == {
-            "dashboard", "loans", "documents.RV", "documents.PR", "documents.PV", "documents.VM", "documents.TR"
+            "dashboard", "loans", "advances", "documents.RV", "documents.PR", "documents.PV", "documents.VM", "documents.TR"
         }
         changed = client.put(
             f"/api/permissions/users/{editor['id']}",
@@ -224,7 +225,7 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.16'
+        assert status_data['version'] == '3.3.17'
         assert status_data['database']['ok'] is True
         assert status_data['counts']['documents'] == 1
         assert len(status_data['templates']) == 15
@@ -245,7 +246,7 @@ def test_system_status_and_backup():
             assert 'app/static/form-templates/receipt-voucher.html' in names
             assert 'app/static/form-templates/request-transfer.html' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.16'
+            assert manifest['version'] == '3.3.17'
             assert manifest['files']
 
 
@@ -558,6 +559,97 @@ def test_loans_lifecycle_payments_and_permissions():
         assert deleted.status_code == 200
         assert client.get(f"/api/loans/{loan['id']}", headers=headers).status_code == 404
 
+
+
+def test_advances_lifecycle_payments_and_permissions():
+    with TestClient(app) as client:
+        client.post('/api/setup/admin', json={'full_name':'Admin','username':'admin','password':'StrongPass123!'})
+        token = client.post('/api/auth/login', json={'username':'admin','password':'StrongPass123!'}).json()['token']
+        headers = auth_headers(token)
+
+        invalid_month = client.post('/api/advances', headers=headers, json={
+            'person_name':'أحمد علي حسن',
+            'amount':500,
+            'advance_month':'2026-13',
+            'notes':'اختبار',
+        })
+        assert invalid_month.status_code == 422
+
+        created = client.post('/api/advances', headers=headers, json={
+            'person_name':'أحمد علي حسن',
+            'amount':500,
+            'advance_month':'2026-08',
+            'notes':'سلفة شهر آب',
+        })
+        assert created.status_code == 201, created.text
+        advance = created.json()
+        assert advance['remaining_amount'] == '500.00'
+        assert advance['paid_amount'] == '0.00'
+        assert advance['advance_month'] == '2026-08'
+        assert advance['notes'] == 'سلفة شهر آب'
+
+        paid = client.post(f"/api/advances/{advance['id']}/payments", headers=headers, json={'amount':125,'notes':'دفعة أولى'})
+        assert paid.status_code == 201, paid.text
+        assert paid.json()['remaining_amount'] == '375.00'
+        assert paid.json()['paid_amount'] == '125.00'
+        assert paid.json()['payments'][0]['notes'] == 'دفعة أولى'
+
+        overpay = client.post(f"/api/advances/{advance['id']}/payments", headers=headers, json={'amount':400,'notes':''})
+        assert overpay.status_code == 422
+
+        edited = client.put(f"/api/advances/{advance['id']}", headers=headers, json={
+            'person_name':'أحمد علي حسن',
+            'amount':600,
+            'advance_month':'2026-09',
+            'notes':'تم تعديل السلفة',
+        })
+        assert edited.status_code == 200, edited.text
+        assert edited.json()['remaining_amount'] == '475.00'
+        assert edited.json()['advance_month'] == '2026-09'
+
+        viewer = client.post('/api/users', headers=headers, json={
+            'full_name':'Advance Viewer','username':'advance.viewer','password':'ViewerPass123!','role':'viewer'
+        }).json()
+        client.put(f"/api/permissions/users/{viewer['id']}", headers=headers, json={'page_keys':['advances']})
+        viewer_token = client.post('/api/auth/login', json={'username':'advance.viewer','password':'ViewerPass123!'}).json()['token']
+        viewer_headers = auth_headers(viewer_token)
+        assert client.get('/api/advances', headers=viewer_headers).status_code == 200
+        assert client.post('/api/advances', headers=viewer_headers, json={
+            'person_name':'مستخدم اختبار ثلاثي','amount':100,'advance_month':'2026-08','notes':''
+        }).status_code == 403
+
+        removed = client.put(f"/api/permissions/users/{viewer['id']}", headers=headers, json={'page_keys':[]})
+        assert removed.status_code == 200
+        assert client.get('/api/advances', headers=viewer_headers).status_code == 403
+
+        payoff = client.post(f"/api/advances/{advance['id']}/payments", headers=headers, json={'amount':475,'notes':'إقفال السلفة'})
+        assert payoff.status_code == 201, payoff.text
+        assert payoff.json()['remaining_amount'] == '0.00'
+        assert payoff.json()['status'] == 'paid'
+
+        bad_delete = client.request('DELETE', f"/api/advances/{advance['id']}/permanent", headers=headers, json={'confirmation':'delete'})
+        assert bad_delete.status_code == 422
+        deleted = client.request('DELETE', f"/api/advances/{advance['id']}/permanent", headers=headers, json={'confirmation':'حذف نهائي'})
+        assert deleted.status_code == 200
+        assert client.get(f"/api/advances/{advance['id']}", headers=headers).status_code == 404
+
+
+def test_v3317_invoice_font_and_advances_ui_contract():
+    project = Path(__file__).resolve().parents[1]
+    javascript = (project / 'app' / 'static' / 'app.js').read_text(encoding='utf-8')
+    pdf_service = (project / 'app' / 'services' / 'pdf_service.py').read_text(encoding='utf-8')
+    stylesheet = (project / 'app' / 'static' / 'styles.css').read_text(encoding='utf-8')
+
+    assert 'TEMPLATE_DATA_MIN_FONT_PT = 16' in javascript
+    assert "element.style.setProperty('font-size', `${TEMPLATE_DATA_MIN_FONT_PT}pt`, 'important')" in javascript
+    assert 'HTML_DATA_MIN_FONT_PT = 16' in pdf_service
+    assert "element.style.setProperty('font-size', '16pt', 'important')" in pdf_service
+    assert "renderAdvances" in javascript
+    assert "renderAdvanceDetails" in javascript
+    assert "renderAdvanceReport" in javascript
+    assert "openAdvancePaymentModal" in javascript
+    assert "canViewPage('advances')" in javascript
+    assert ".advance-table" in stylesheet
 
 def test_v3314_transfer_workspace_and_dashboard_ui_contract():
     import hashlib

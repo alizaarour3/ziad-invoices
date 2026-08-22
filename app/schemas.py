@@ -108,3 +108,24 @@ class LoanUpdateRequest(LoanCreateRequest):
 class LoanPaymentCreateRequest(BaseModel):
     amount: float = Field(gt=0, le=999999999999)
     notes: str = Field(default="", max_length=1000)
+
+
+class AdvanceCreateRequest(BaseModel):
+    person_name: str = Field(min_length=3, max_length=160)
+    amount: float = Field(gt=0, le=999999999999)
+    notes: str = Field(default="", max_length=2000)
+    advance_month: str = Field(min_length=7, max_length=7, pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+
+    @field_validator("person_name")
+    @classmethod
+    def normalize_person_name(cls, value: str) -> str:
+        return " ".join(value.strip().split())
+
+
+class AdvanceUpdateRequest(AdvanceCreateRequest):
+    pass
+
+
+class AdvancePaymentCreateRequest(BaseModel):
+    amount: float = Field(gt=0, le=999999999999)
+    notes: str = Field(default="", max_length=1000)

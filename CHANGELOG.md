@@ -1,3 +1,14 @@
+# v3.3.17 - Invoice Data Font 16pt & Advances
+
+- Raised user-entered data in every exact HTML invoice template to a minimum of 16pt in both the in-app editor and Chromium PDF output; larger existing field fonts are preserved.
+- Added a normal financial page named **سلف** (Advances), separate from invoice/A4 templates.
+- Advance fields: full three-part name, amount, month, and notes.
+- Added partial/full repayment with automatic paid/remaining balance calculation and immutable payment history.
+- Added View / Edit / Report / Repay / Permanent Delete actions according to account role.
+- Added Advances to page permissions, audit logging, PostgreSQL backups, automatic schema migration, and Supabase RLS hardening.
+- Added `advances` and `advance_payments`; database schema version is now 7.
+- Official HTML template files remain byte-for-byte unchanged.
+
 # v3.3.16 - Supabase Public Schema Security Hardening
 
 - Enabled PostgreSQL Row Level Security on every Ziad Invoices table in the exposed `public` schema when running on Supabase.

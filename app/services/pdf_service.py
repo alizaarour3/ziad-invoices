@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
+from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont, ImageOps, features
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
@@ -19,6 +21,8 @@ from ..settings import ATTACHMENTS_DIR, GENERATED_DIR, STATIC_DIR, TEMPLATES_DIR
 A4_DPI = 300
 A4_SIZE = (2480, 3508)
 BASE_EDITOR_WIDTH = 794
+HTML_DATA_MIN_FONT_PT = 16
+HTML_DATA_MIN_FONT_PX = HTML_DATA_MIN_FONT_PT * 96 / 72
 
 
 ARABIC_RANGES = (
@@ -322,7 +326,162 @@ def _draw_configured_field(
     )
     _draw_text_box(draw, value, box, multiline=field.get("type") == "textarea", **common)
 
+
+def _find_chromium() -> str | None:
+    configured = os.environ.get("CHROMIUM_BIN", "").strip()
+    candidates = [
+        configured,
+        shutil.which("chromium") or "",
+        shutil.which("chromium-browser") or "",
+        shutil.which("google-chrome") or "",
+        shutil.which("google-chrome-stable") or "",
+        shutil.which("chrome") or "",
+        shutil.which("msedge") or "",
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if path.exists():
+            return str(path)
+    return None
+
+
+def _html_selectors(field: dict[str, Any]) -> list[str]:
+    selectors = field.get("html_selectors")
+    if isinstance(selectors, list) and selectors:
+        return [str(item) for item in selectors if item]
+    selector = field.get("html_selector")
+    return [str(selector)] if selector else []
+
+
+def _set_html_value(element: Any, value: Any, field_type: str) -> None:
+    if field_type == "checkbox" or element.name == "input" and element.get("type", "").lower() == "checkbox":
+        truthy = value in (True, 1, "1", "true", "on", "yes")
+        if truthy:
+            element["checked"] = "checked"
+        elif element.has_attr("checked"):
+            del element["checked"]
+        return
+    text = "" if value is None else str(value)
+    if element.name == "textarea":
+        element.clear()
+        element.append(text)
+    elif element.name in {"input", "select"}:
+        element["value"] = text
+    else:
+        element.clear()
+        element.append(text)
+
+
+def _render_html_template_pdf(template: dict[str, Any], values: dict[str, Any], output_path: Path) -> Path:
+    template_name = str(template.get("html_template") or "").strip()
+    if not template_name:
+        raise RuntimeError("HTML template filename is missing")
+    source_path = (STATIC_DIR / "form-templates" / template_name).resolve()
+    if not source_path.exists():
+        raise RuntimeError(f"HTML template not found: {template_name}")
+
+    chromium = _find_chromium()
+    if not chromium:
+        raise RuntimeError(
+            "Chromium/Chrome/Edge is required to print the exact HTML invoice templates. "
+            "Install Chromium on the server or use the production Docker image."
+        )
+
+    soup = BeautifulSoup(source_path.read_text(encoding="utf-8"), "html.parser")
+    # Uploaded HTML stays byte-for-byte untouched on disk. Only this temporary
+    # in-memory render copy has its convenience scripts removed so browser
+    # localStorage can never override data saved by the application.
+    for script in soup.find_all("script"):
+        script.decompose()
+
+    for field in template.get("fields", []):
+        selectors = _html_selectors(field)
+        if not selectors:
+            continue
+        raw = values.get(field.get("key"), "")
+        if len(selectors) > 1:
+            parts = str(raw or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+            parts = (parts + [""] * len(selectors))[: len(selectors)]
+        else:
+            parts = [raw]
+        for selector, value in zip(selectors, parts):
+            element = soup.select_one(selector)
+            if element is None:
+                raise RuntimeError(f"Template field selector not found: {template_name} :: {selector}")
+            _set_html_value(element, value, str(field.get("type") or "text"))
+            element["data-ziad-print-field"] = "1"
+            if field.get("direction") in {"rtl", "ltr"}:
+                element["dir"] = field["direction"]
+
+    helper_style = soup.new_tag("style")
+    helper_style.string = """
+      [data-ziad-print-field="1"] {
+        outline:none !important; box-shadow:none !important;
+        caret-color:transparent !important;
+      }
+    """
+    if soup.head:
+        soup.head.append(helper_style)
+    else:
+        soup.insert(0, helper_style)
+
+    root_selector = str(template.get("html_root") or ".page, .sheet, main")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_png = output_path.with_suffix(".browser.png")
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(
+                headless=True,
+                executable_path=chromium,
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+            )
+            try:
+                context = browser.new_context(
+                    viewport={"width": 1600, "height": 2200},
+                    device_scale_factor=2,
+                    locale="ar-IQ",
+                )
+                page = context.new_page()
+                page.set_content(str(soup), wait_until="load", timeout=45000)
+                page.evaluate(
+                    """(minimumPx) => {
+                        document.querySelectorAll('[data-ziad-print-field="1"]').forEach((element) => {
+                            const current = parseFloat(getComputedStyle(element).fontSize || '0');
+                            if (Number.isFinite(current) && current < minimumPx) {
+                                element.style.setProperty('font-size', '16pt', 'important');
+                            }
+                        });
+                    }""",
+                    HTML_DATA_MIN_FONT_PX,
+                )
+                root = page.locator(root_selector).first
+                if root.count() != 1:
+                    raise RuntimeError(f"HTML template root not found: {template_name} :: {root_selector}")
+                root.screenshot(path=str(temp_png), animations="disabled")
+                context.close()
+            finally:
+                browser.close()
+
+        with Image.open(temp_png) as rendered:
+            a4 = rendered.convert("RGB").resize(A4_SIZE, Image.Resampling.LANCZOS)
+            a4.save(output_path, "PDF", resolution=float(A4_DPI), quality=95)
+    finally:
+        temp_png.unlink(missing_ok=True)
+    return output_path
+
+
 def render_document_pdf(template: dict, values: dict[str, Any], output_path: Path) -> Path:
+    if template.get("template_engine") == "html" and template.get("html_template"):
+        return _render_html_template_pdf(template, values, output_path)
+
     """Place entered values on a separate overlay and merge it with the untouched source PDF.
 
     The uploaded PDF bytes are never rewritten. Every original page is retained, including
@@ -464,7 +623,7 @@ def build_print_bundle(
     attachment_key = ",".join(f"{item['id']}:{item['sha256']}" for item in attachments)
     cache_key = hashlib.sha256(
         json.dumps(
-            {"document": document_id, "revision": revision, "attachments": attachment_key, "paper": "A4-300dpi-arabic-v3"},
+            {"document": document_id, "revision": revision, "attachments": attachment_key, "paper": "A4-html-exact-browser-v1"},
             sort_keys=True,
         ).encode("utf-8")
     ).hexdigest()[:20]

@@ -1,4 +1,4 @@
--- Optional manual bootstrap for Ziad Invoices Professional 3.3.11.
+-- Optional manual bootstrap for Ziad Invoices Professional 3.3.17.
 -- The application creates the same schema automatically on startup.
 
 create table if not exists public.schema_meta (
@@ -132,6 +132,35 @@ create table if not exists public.loan_payments (
 create index if not exists idx_loan_payments_loan on public.loan_payments(loan_id, id);
 create index if not exists idx_loan_payments_paid_at on public.loan_payments(paid_at desc);
 
+create table if not exists public.advances (
+  id bigserial primary key,
+  person_name text not null,
+  amount_minor bigint not null check (amount_minor > 0),
+  notes text not null default '',
+  advance_month text not null,
+  remaining_amount_minor bigint not null check (remaining_amount_minor >= 0),
+  created_by bigint not null references public.users(id),
+  updated_by bigint not null references public.users(id),
+  created_at text not null,
+  updated_at text not null
+);
+create index if not exists idx_advances_person_name on public.advances(person_name);
+create index if not exists idx_advances_month on public.advances(advance_month);
+create index if not exists idx_advances_remaining on public.advances(remaining_amount_minor);
+create index if not exists idx_advances_updated_at on public.advances(updated_at desc);
+
+create table if not exists public.advance_payments (
+  id bigserial primary key,
+  advance_id bigint not null references public.advances(id) on delete cascade,
+  amount_minor bigint not null check (amount_minor > 0),
+  remaining_amount_minor_after bigint not null check (remaining_amount_minor_after >= 0),
+  notes text not null default '',
+  paid_by bigint not null references public.users(id),
+  paid_at text not null
+);
+create index if not exists idx_advance_payments_advance on public.advance_payments(advance_id, id);
+create index if not exists idx_advance_payments_paid_at on public.advance_payments(paid_at desc);
+
 create table if not exists public.audit_logs (
   id bigserial primary key,
   user_id bigint references public.users(id) on delete set null,
@@ -163,7 +192,7 @@ begin
   foreach table_name in array array[
     'schema_meta','users','sessions','user_page_permissions','document_types',
     'number_sequences','documents','document_revisions','attachments','loans',
-    'loan_payments','audit_logs','settings'
+    'loan_payments','advances','advance_payments','audit_logs','settings'
   ]
   loop
     execute format('alter table public.%I enable row level security', table_name);

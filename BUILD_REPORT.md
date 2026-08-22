@@ -1,13 +1,18 @@
-# Ziad Invoices Professional v3.3.16 — Build Report
+# Ziad Invoices Professional v3.3.17 — Build Report
 
-Security hardening release for the Supabase `rls_disabled_in_public` warning.
+Release scope:
+- Invoice data font minimum: 16pt in editor + printed HTML/PDF output.
+- New financial page: Advances / سلف with repayment history and permissions.
+- Automatic database schema migration to version 7.
+- Supabase RLS hardening extended to the new financial tables.
 
 Validated locally:
 - Python compile: PASS
 - JavaScript syntax check: PASS
-- Automated tests: 14/14 PASS
-- Official HTML template hashes: unchanged from v3.3.15
-- Security regression test: verifies RLS enable + anon/authenticated privilege revocation statements for all application tables
+- Automated tests: 16/16 PASS
+- Official HTML template hashes: unchanged from v3.3.16
+- Advances lifecycle/permissions: PASS
+- 16pt editor + print font contract: PASS
+- Supabase RLS table coverage: PASS
 
-Database security schema version: 6.
-No business records are deleted or rewritten by this release.
+No official HTML invoice template file is modified by this release.

@@ -1,4 +1,4 @@
--- Ziad Invoices Professional v3.3.16
+-- Ziad Invoices Professional v3.3.17
 -- One-time Supabase hardening for an existing production database.
 -- This application uses its FastAPI backend for database access; browser roles do not
 -- need direct access to these tables through the Supabase Data API.
@@ -21,6 +21,8 @@ begin
     'attachments',
     'loans',
     'loan_payments',
+    'advances',
+    'advance_payments',
     'audit_logs',
     'settings'
   ]
@@ -53,7 +55,7 @@ where n.nspname = 'public'
   and c.relname in (
     'schema_meta','users','sessions','user_page_permissions','document_types',
     'number_sequences','documents','document_revisions','attachments','loans',
-    'loan_payments','audit_logs','settings'
+    'loan_payments','advances','advance_payments','audit_logs','settings'
   )
 order by c.relname;
 
@@ -65,6 +67,6 @@ where table_schema = 'public'
   and table_name in (
     'schema_meta','users','sessions','user_page_permissions','document_types',
     'number_sequences','documents','document_revisions','attachments','loans',
-    'loan_payments','audit_logs','settings'
+    'loan_payments','advances','advance_payments','audit_logs','settings'
   )
 order by grantee, table_name, privilege_type;

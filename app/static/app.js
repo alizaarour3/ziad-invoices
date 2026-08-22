@@ -4,6 +4,9 @@ const root = document.getElementById('app');
 const modalRoot = document.getElementById('modal-root');
 const toastRoot = document.getElementById('toast-root');
 
+const TEMPLATE_DATA_MIN_FONT_PT = 16;
+const TEMPLATE_DATA_MIN_FONT_PX = TEMPLATE_DATA_MIN_FONT_PT * 96 / 72;
+
 const state = {
   token: localStorage.getItem('ziad_token') || '',
   user: null,
@@ -62,6 +65,14 @@ function formatDate(value, includeTime = false) {
   if (Number.isNaN(date.getTime())) return escapeHtml(value);
   return new Intl.DateTimeFormat('ar-IQ', includeTime ? {dateStyle:'medium', timeStyle:'short'} : {dateStyle:'medium'}).format(date);
 }
+function formatAdvanceMonth(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return escapeHtml(raw || '-');
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
+  return new Intl.DateTimeFormat('ar-IQ', {month:'long', year:'numeric', timeZone:'UTC'}).format(date);
+}
+
 function formatBytes(bytes) {
   const number = Number(bytes || 0);
   if (number < 1024) return `${number} B`;
@@ -107,6 +118,7 @@ function firstAllowedRoute() {
   const firstType = state.types[0];
   if (firstType) return `/documents/${firstType.code}`;
   if (canViewPage('loans')) return '/loans';
+  if (canViewPage('advances')) return '/advances';
   return '/no-access';
 }
 function statusBadge(status) { return `<span class="badge badge-${status}">${status === 'draft' ? 'مسودة' : 'محفوظ'}</span>`; }
@@ -284,15 +296,16 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
   const typeLinks = state.types.map(type => `
     <a class="nav-item ${active === type.code ? 'active' : ''}" href="#/documents/${type.code}" title="${escapeHtml(type.name_ar)}">${icon('file')}<span>${escapeHtml(type.name_ar)}</span><span class="nav-badge">${state.counts[type.code] ?? ''}</span></a>
   `).join('');
-  const financeLinks = canViewPage('loans') ? `
+  const financeLinks = (canViewPage('loans') || canViewPage('advances')) ? `
     <div class="nav-label">المالية</div>
-    <a class="nav-item ${activePath('/loans')}" href="#/loans" title="قروض">${icon('loan')}<span>قروض</span></a>` : '';
+    ${canViewPage('loans') ? `<a class="nav-item ${activePath('/loans')}" href="#/loans" title="قروض">${icon('loan')}<span>قروض</span></a>` : ''}
+    ${canViewPage('advances') ? `<a class="nav-item ${activePath('/advances')}" href="#/advances" title="سلف">${icon('wallet')}<span>سلف</span></a>` : ''}` : '';
   root.innerHTML = `
     <div class="app-shell ${state.sidebarCollapsed ? 'sidebar-collapsed' : ''}" id="app-shell">
       <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-head">
-          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.16</span></div></div>
+          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.17</span></div></div>
           <button id="sidebar-close" class="btn btn-icon btn-link sidebar-close" aria-label="إغلاق القائمة">${icon('close')}</button>
         </div>
         <nav class="sidebar-nav">
@@ -877,6 +890,10 @@ function configureHtmlTemplateFrame(frame, doc, viewOnly) {
       if (!element) return;
       element.dataset.ziadField = '1';
       element.dataset.ziadFieldKey = field.key;
+      const computedFontPx = parseFloat(frameDoc.defaultView?.getComputedStyle(element).fontSize || '0');
+      if (Number.isFinite(computedFontPx) && computedFontPx < TEMPLATE_DATA_MIN_FONT_PX) {
+        element.style.setProperty('font-size', `${TEMPLATE_DATA_MIN_FONT_PT}pt`, 'important');
+      }
       setHtmlElementValue(element, lineValues[index] ?? '', field.type);
       const locked = viewOnly || field.readonly || field.html_readonly;
       if (element.matches('input, textarea')) {
@@ -942,7 +959,7 @@ async function renderDocumentEditor(id, mode) {
   const useHtmlTemplate = doc.type.config.template_engine === 'html' && Boolean(doc.type.config.html_template);
   const fields = useHtmlTemplate ? '' : doc.type.config.fields.map(field => fieldHtml(field, doc.fields[field.key], viewOnly)).join('');
   const templateMarkup = useHtmlTemplate
-    ? `<iframe id="template-frame" class="html-template-frame" src="/form-templates/${encodeURIComponent(doc.type.config.html_template)}?v=3.3.16" title="${escapeHtml(doc.type.name_ar)}"></iframe>`
+    ? `<iframe id="template-frame" class="html-template-frame" src="/form-templates/${encodeURIComponent(doc.type.config.html_template)}?v=3.3.17" title="${escapeHtml(doc.type.name_ar)}"></iframe>`
     : `<img class="template-bg" src="${doc.type.image_url}" alt="${escapeHtml(doc.type.name_ar)}">${fields}`;
   const attachments = attachmentsHtml(doc.attachments || [], viewOnly);
   const primaryAction = viewOnly ? (state.user.role !== 'viewer' ? `<button id="edit-document" class="btn btn-primary">${icon('edit')} تعديل</button>` : '') : `<select id="document-status" class="control compact status-control"><option value="saved" ${doc.status === 'saved' ? 'selected' : ''}>محفوظ</option><option value="draft" ${doc.status === 'draft' ? 'selected' : ''}>مسودة</option></select><button id="save-document" class="btn btn-primary">${icon('save')} حفظ</button>`;
@@ -1366,6 +1383,240 @@ async function renderLoanDetails(id) {
   document.getElementById('loan-detail-delete')?.addEventListener('click', () => openLoanDeleteModal(loan, () => navigate('/loans')));
 }
 
+
+function advanceStatusBadge(advance) {
+  return advance.status === 'paid'
+    ? '<span class="badge badge-saved">مسددة بالكامل</span>'
+    : '<span class="badge badge-draft">قائمة</span>';
+}
+
+function advanceActionButtons(advance) {
+  const canEdit = state.user.role !== 'viewer';
+  const pay = canEdit && advance.status !== 'paid' ? `<button type="button" class="btn btn-primary row-action" data-advance-action="pay" data-id="${advance.id}">${icon('check')}<span>تسديد</span></button>` : '';
+  const edit = canEdit ? `<button type="button" class="btn btn-secondary row-action" data-advance-action="edit" data-id="${advance.id}">${icon('edit')}<span>تعديل</span></button>` : '';
+  const report = `<button type="button" class="btn btn-secondary row-action" data-advance-action="report" data-id="${advance.id}">${icon('print')}<span>تقرير</span></button>`;
+  const remove = state.user.role === 'admin' ? `<button type="button" class="btn btn-danger-soft row-action" data-advance-action="delete" data-id="${advance.id}">${icon('trash')}<span>حذف نهائي</span></button>` : '';
+  return `<div class="row-actions"><button type="button" class="btn btn-secondary row-action" data-advance-action="view" data-id="${advance.id}">${icon('eye')}<span>مشاهدة</span></button>${report}${pay}${edit}${remove}</div>`;
+}
+
+function wireAdvanceActions(advances, onChanged = renderAdvances) {
+  root.querySelectorAll('[data-advance-action]').forEach(button => button.addEventListener('click', async () => {
+    const id = Number(button.dataset.id);
+    let advance = advances?.find(item => item.id === id);
+    if (!advance) {
+      try { advance = await api(`/api/advances/${id}`); } catch (err) { return toast(err.message, 'error'); }
+    }
+    const action = button.dataset.advanceAction;
+    if (action === 'view') return navigate(`/advances/${id}`);
+    if (action === 'report') return navigate(`/advances/${id}/report`);
+    if (action === 'edit') return openAdvanceForm(advance, onChanged);
+    if (action === 'pay') return openAdvancePaymentModal(advance, onChanged);
+    if (action === 'delete') return openAdvanceDeleteModal(advance, onChanged);
+  }));
+}
+
+async function renderAdvanceReport(id) {
+  pageLoading('تقرير السلفة');
+  const advance = await api(`/api/advances/${id}`);
+  const payments = advance.payments || [];
+  const rows = payments.map((payment, index) => `<tr><td>${payments.length-index}</td><td>${formatMoney(payment.amount)}</td><td>${formatMoney(payment.remaining_amount_after)}</td><td>${escapeHtml(payment.paid_by_name || '-')}</td><td>${formatDate(payment.paid_at,true)}</td><td>${escapeHtml(payment.notes || '-')}</td></tr>`).join('');
+  const generatedAt = new Date().toLocaleString('ar-IQ');
+  shell('تقرير السلفة', `
+    <div class="page-header loan-report-screen-header">
+      <div><span class="eyebrow">سلف</span><h1>تقرير ${escapeHtml(advance.person_name)}</h1><p>ملخص السلفة وسجل جميع عمليات التسديد.</p></div>
+      <div class="page-actions"><a class="btn btn-secondary" href="#/advances/${advance.id}">${icon('chevron')} رجوع للسلفة</a><button id="advance-report-print-btn" class="btn btn-primary">${icon('print')} طباعة / حفظ PDF</button></div>
+    </div>
+    <article class="loan-report-paper" id="advance-report-paper">
+      <header class="loan-report-top"><div><p>نظام المستندات — تقرير السلف</p><h2>${escapeHtml(advance.person_name)}</h2><p>شهر السلفة: ${formatAdvanceMonth(advance.advance_month)}</p></div><span class="loan-report-status ${advance.status === 'paid' ? 'paid' : ''}">${advance.status === 'paid' ? 'مسددة بالكامل' : 'قائمة'}</span></header>
+      <section class="loan-report-grid">
+        <div class="loan-report-card"><span>مبلغ السلفة</span><strong>${formatMoney(advance.amount)}</strong></div>
+        <div class="loan-report-card"><span>إجمالي المسدد</span><strong>${formatMoney(advance.paid_amount)}</strong></div>
+        <div class="loan-report-card emphasis"><span>المبلغ المتبقي</span><strong>${formatMoney(advance.remaining_amount)}</strong></div>
+      </section>
+      <section class="advance-report-notes"><span>ملاحظات السلفة</span><p>${escapeHtml(advance.notes || 'لا توجد ملاحظات')}</p></section>
+      <section class="loan-report-history"><h3>سجل التسديدات</h3><div class="table-wrap"><table><thead><tr><th>#</th><th>مبلغ التسديد</th><th>المبلغ الباقي</th><th>المستخدم</th><th>التاريخ</th><th>ملاحظة</th></tr></thead><tbody>${rows || `<tr><td colspan="6" class="empty">لم يتم تسجيل أي تسديد بعد.</td></tr>`}</tbody></table></div></section>
+      <footer class="loan-report-meta"><span>شهر السلفة: <strong>${formatAdvanceMonth(advance.advance_month)}</strong></span><span>تاريخ الإنشاء: <strong>${formatDate(advance.created_at,true)}</strong></span><span>أنشأها: <strong>${escapeHtml(advance.created_by_name || '-')}</strong></span><span>تاريخ التقرير: <strong>${escapeHtml(generatedAt)}</strong></span></footer>
+    </article>`);
+  document.getElementById('advance-report-print-btn')?.addEventListener('click', () => window.print());
+}
+
+async function renderAdvances() {
+  pageLoading('سلف');
+  const advances = await api('/api/advances');
+  const active = advances.filter(item => item.status === 'active');
+  const paid = advances.filter(item => item.status === 'paid');
+  const remainingTotal = active.reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0);
+  const canEdit = state.user.role !== 'viewer';
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const addPanel = canEdit ? `
+    <section class="panel loan-create-panel advance-create-panel">
+      <div class="panel-head"><div><h3>إضافة سلفة</h3><p>أدخل الاسم الثلاثي والمبلغ والشهر والملاحظات، ثم تابع التسديد من نفس الصفحة.</p></div>${icon('wallet')}</div>
+      <form id="advance-create-form" class="loan-inline-form advance-inline-form">
+        <div class="form-row"><label>الاسم الثلاثي</label><input class="control" name="person_name" required minlength="3" maxlength="160" placeholder="أدخل الاسم الثلاثي"></div>
+        <div class="form-row"><label>المبلغ</label><input class="control" name="amount" type="number" min="0.01" step="0.01" required placeholder="0.00"></div>
+        <div class="form-row"><label>الشهر</label><input class="control" name="advance_month" type="month" required value="${defaultMonth}"></div>
+        <div class="form-row advance-notes-field"><label>ملاحظات</label><input class="control" name="notes" maxlength="2000" placeholder="ملاحظات اختيارية"></div>
+        <div class="loan-inline-actions"><div id="advance-create-error" class="error-text"></div><button id="advance-create-save" class="btn btn-primary" type="submit">${icon('plus')} إضافة</button></div>
+      </form>
+    </section>` : '';
+  shell('سلف', `
+    <div class="page-header advance-page-header"><div><span class="eyebrow">الإدارة المالية</span><h1>سلف</h1><p>صفحة مستقلة لتسجيل السلف وتسديدها ومتابعة المبلغ المتبقي وسجل الدفعات.</p></div></div>
+    ${addPanel}
+    <div class="list-summary"><div class="summary-pill"><strong>${advances.length}</strong><span>كل السلف</span></div><div class="summary-pill"><strong>${active.length}</strong><span>سلفة قائمة</span></div><div class="summary-pill"><strong>${paid.length}</strong><span>مسددة بالكامل</span></div><div class="summary-pill"><strong>${formatMoney(remainingTotal)}</strong><span>إجمالي المتبقي</span></div></div>
+    <div class="panel"><div class="panel-head document-toolbar"><div class="filters"><div class="search-box">${icon('search')}<input id="advance-search" class="control" placeholder="بحث بالاسم أو الشهر أو الملاحظات..."></div><select id="advance-status" class="control compact"><option value="">كل الحالات</option><option value="active">قائمة</option><option value="paid">مسددة بالكامل</option></select><input id="advance-month-filter" class="control compact" type="month" title="تصفية حسب الشهر"></div></div>
+      <div class="table-wrap"><table class="advance-table"><thead><tr><th>الاسم الثلاثي</th><th>الشهر</th><th>المبلغ</th><th>الملاحظات</th><th>المسدد</th><th>المتبقي</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="advance-rows"></tbody></table></div></div>`);
+
+  const draw = () => {
+    const term = document.getElementById('advance-search').value.trim().toLowerCase();
+    const status = document.getElementById('advance-status').value;
+    const month = document.getElementById('advance-month-filter').value;
+    const filtered = advances.filter(advance => {
+      const haystack = `${advance.person_name} ${advance.notes || ''} ${advance.advance_month}`.toLowerCase();
+      return (!term || haystack.includes(term)) && (!status || advance.status === status) && (!month || advance.advance_month === month);
+    });
+    const body = document.getElementById('advance-rows');
+    body.innerHTML = filtered.map(advance => `<tr><td><strong>${escapeHtml(advance.person_name)}</strong><span class="table-subtext">${advance.payment_count} عملية تسديد</span></td><td><span class="advance-month-pill">${formatAdvanceMonth(advance.advance_month)}</span></td><td class="mono">${formatMoney(advance.amount)}</td><td><div class="advance-note-cell">${escapeHtml(advance.notes || '-')}</div></td><td class="mono">${formatMoney(advance.paid_amount)}</td><td><strong class="mono">${formatMoney(advance.remaining_amount)}</strong></td><td>${advanceStatusBadge(advance)}</td><td>${advanceActionButtons(advance)}</td></tr>`).join('') || `<tr><td colspan="8"><div class="empty"><div class="stat-icon">${icon('wallet')}</div><h3>لا توجد سلف</h3><p>أضف أول سلفة من الحقول الموجودة أعلى الصفحة.</p></div></td></tr>`;
+    wireAdvanceActions(filtered);
+  };
+  document.getElementById('advance-search').addEventListener('input', draw);
+  document.getElementById('advance-status').addEventListener('change', draw);
+  document.getElementById('advance-month-filter').addEventListener('change', draw);
+
+  const createForm = document.getElementById('advance-create-form');
+  createForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!createForm.reportValidity()) return;
+    const form = new FormData(createForm);
+    const button = document.getElementById('advance-create-save');
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="loader"></span> جارٍ الإضافة';
+    document.getElementById('advance-create-error').textContent = '';
+    try {
+      await api('/api/advances', {method:'POST', body:{
+        person_name:form.get('person_name'),
+        amount:Number(form.get('amount')),
+        advance_month:form.get('advance_month'),
+        notes:form.get('notes') || ''
+      }});
+      toast('تمت إضافة السلفة', 'success');
+      await renderAdvances();
+    } catch (err) {
+      document.getElementById('advance-create-error').textContent = err.message;
+      button.disabled = false;
+      button.innerHTML = original;
+    }
+  });
+  draw();
+}
+
+function openAdvanceForm(advance = null, onSaved = renderAdvances) {
+  const editing = Boolean(advance);
+  const body = `<form id="advance-form" class="form-grid">
+    <div class="form-row"><label>الاسم الثلاثي</label><input class="control" name="person_name" required minlength="3" maxlength="160" value="${escapeHtml(advance?.person_name || '')}"></div>
+    <div class="form-row"><label>المبلغ</label><input class="control" name="amount" type="number" min="0.01" step="0.01" required value="${escapeHtml(advance?.amount || '')}"></div>
+    <div class="form-row"><label>الشهر</label><input class="control" name="advance_month" type="month" required value="${escapeHtml(advance?.advance_month || '')}"></div>
+    <div class="form-row full"><label>ملاحظات</label><textarea class="control" name="notes" maxlength="2000" rows="4">${escapeHtml(advance?.notes || '')}</textarea></div>
+    ${editing && advance.payment_count ? `<div class="lock-note full">تم تسجيل ${advance.payment_count} عملية تسديد بقيمة ${formatMoney(advance.paid_amount)}. لا يمكن تخفيض مبلغ السلفة عن المبلغ المسدد.</div>` : ''}
+    <div id="advance-form-error" class="error-text full"></div>
+  </form>`;
+  showModal(editing ? 'تعديل السلفة' : 'إضافة سلفة', body, ['<button id="advance-form-cancel" class="btn btn-secondary">إلغاء</button>', `<button id="advance-form-save" class="btn btn-primary">${icon('save')} حفظ</button>`], 'modal-lg');
+  document.getElementById('advance-form-cancel').addEventListener('click', closeModal);
+  document.getElementById('advance-form-save').addEventListener('click', async event => {
+    const formEl = document.getElementById('advance-form');
+    if (!formEl.reportValidity()) return;
+    const form = new FormData(formEl);
+    const button = event.currentTarget;
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="loader"></span> جارٍ الحفظ';
+    try {
+      const payload = {person_name:form.get('person_name'), amount:Number(form.get('amount')), advance_month:form.get('advance_month'), notes:form.get('notes') || ''};
+      await api(editing ? `/api/advances/${advance.id}` : '/api/advances', {method:editing ? 'PUT' : 'POST', body:payload});
+      closeModal();
+      toast(editing ? 'تم تعديل السلفة' : 'تمت إضافة السلفة', 'success');
+      await onSaved();
+    } catch (err) {
+      document.getElementById('advance-form-error').textContent = err.message;
+      button.disabled = false;
+      button.innerHTML = original;
+    }
+  });
+}
+
+function openAdvancePaymentModal(advance, onSaved = renderAdvances) {
+  if (!advance || advance.status === 'paid') return toast('تم تسديد هذه السلفة بالكامل', 'error');
+  const body = `<form id="advance-payment-form" class="form-grid">
+    <div class="loan-payment-summary"><div><span>الاسم</span><strong>${escapeHtml(advance.person_name)}</strong></div><div><span>الشهر</span><strong>${formatAdvanceMonth(advance.advance_month)}</strong></div><div><span>المبلغ المتبقي</span><strong>${formatMoney(advance.remaining_amount)}</strong></div></div>
+    <div class="form-row"><label>مبلغ التسديد</label><input class="control" name="amount" type="number" min="0.01" max="${escapeHtml(advance.remaining_amount)}" step="0.01" required autofocus><span class="help">يمكن تسديد أي مبلغ حتى قيمة المتبقي ${formatMoney(advance.remaining_amount)}.</span></div>
+    <div class="form-row"><label>ملاحظة التسديد</label><textarea class="control" name="notes" maxlength="1000" rows="3" placeholder="ملاحظة اختيارية"></textarea></div>
+    <div id="advance-payment-error" class="error-text"></div>
+  </form>`;
+  showModal('تسديد السلفة', body, ['<button id="advance-payment-cancel" class="btn btn-secondary">إلغاء</button>', `<button id="advance-payment-save" class="btn btn-primary">${icon('check')} تأكيد التسديد</button>`]);
+  document.getElementById('advance-payment-cancel').addEventListener('click', closeModal);
+  document.getElementById('advance-payment-save').addEventListener('click', async event => {
+    const formEl = document.getElementById('advance-payment-form');
+    if (!formEl.reportValidity()) return;
+    const form = new FormData(formEl);
+    const button = event.currentTarget;
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="loader"></span> جارٍ التسديد';
+    try {
+      const updated = await api(`/api/advances/${advance.id}/payments`, {method:'POST', body:{amount:Number(form.get('amount')), notes:form.get('notes') || ''}});
+      closeModal();
+      toast(`تم التسديد. المبلغ المتبقي ${formatMoney(updated.remaining_amount)}`, 'success');
+      await onSaved();
+    } catch (err) {
+      document.getElementById('advance-payment-error').textContent = err.message;
+      button.disabled = false;
+      button.innerHTML = original;
+    }
+  });
+}
+
+function openAdvanceDeleteModal(advance, onDeleted = renderAdvances) {
+  showModal('حذف السلفة نهائياً', `<div class="danger-box"><strong>سيتم حذف السلفة وسجل جميع التسديدات نهائياً.</strong><p>${escapeHtml(advance.person_name)} — المتبقي ${formatMoney(advance.remaining_amount)}</p></div><div class="form-row"><label>اكتب «حذف نهائي» للتأكيد</label><input id="advance-delete-confirm" class="control" autocomplete="off"></div><div id="advance-delete-error" class="error-text"></div>`, ['<button id="advance-delete-cancel" class="btn btn-secondary">إلغاء</button>', `<button id="advance-delete-go" class="btn btn-danger">${icon('trash')} حذف نهائي</button>`]);
+  document.getElementById('advance-delete-cancel').addEventListener('click', closeModal);
+  document.getElementById('advance-delete-go').addEventListener('click', async event => {
+    const button = event.currentTarget;
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="loader"></span> جارٍ الحذف';
+    try {
+      await api(`/api/advances/${advance.id}/permanent`, {method:'DELETE', body:{confirmation:document.getElementById('advance-delete-confirm').value}});
+      closeModal();
+      toast('تم حذف السلفة نهائياً', 'success');
+      await onDeleted();
+    } catch (err) {
+      document.getElementById('advance-delete-error').textContent = err.message;
+      button.disabled = false;
+      button.innerHTML = original;
+    }
+  });
+}
+
+async function renderAdvanceDetails(id) {
+  pageLoading('تفاصيل السلفة');
+  const advance = await api(`/api/advances/${id}`);
+  const canEdit = state.user.role !== 'viewer';
+  const actions = `<a class="btn btn-secondary" href="#/advances">${icon('chevron')} رجوع للسلف</a><button id="advance-detail-report" class="btn btn-secondary">${icon('print')} تقرير</button>${canEdit && advance.status !== 'paid' ? `<button id="advance-detail-pay" class="btn btn-primary">${icon('check')} تسديد</button>` : ''}${canEdit ? `<button id="advance-detail-edit" class="btn btn-secondary">${icon('edit')} تعديل</button>` : ''}${state.user.role === 'admin' ? `<button id="advance-detail-delete" class="btn btn-danger-soft">${icon('trash')} حذف نهائي</button>` : ''}`;
+  const payments = advance.payments || [];
+  shell('تفاصيل السلفة', `
+    <div class="page-header"><div><span class="eyebrow">سلف</span><h1>${escapeHtml(advance.person_name)}</h1><p>${advanceStatusBadge(advance)}</p></div><div class="page-actions">${actions}</div></div>
+    <div class="loan-detail-grid">
+      <section class="panel"><div class="panel-head"><div><h3>ملخص السلفة</h3><p>${formatAdvanceMonth(advance.advance_month)}</p></div>${icon('wallet')}</div><div class="loan-stat-grid">
+        <div class="loan-stat"><span>مبلغ السلفة</span><strong>${formatMoney(advance.amount)}</strong></div><div class="loan-stat"><span>المبلغ المسدد</span><strong>${formatMoney(advance.paid_amount)}</strong></div><div class="loan-stat emphasis"><span>المبلغ المتبقي</span><strong>${formatMoney(advance.remaining_amount)}</strong></div>
+      </div><div class="advance-detail-notes"><span>الملاحظات</span><p>${escapeHtml(advance.notes || 'لا توجد ملاحظات')}</p></div><div class="panel-body loan-meta"><span>أنشأها: <strong>${escapeHtml(advance.created_by_name || '-')}</strong></span><span>تاريخ الإنشاء: <strong>${formatDate(advance.created_at,true)}</strong></span><span>آخر تعديل: <strong>${formatDate(advance.updated_at,true)}</strong></span></div></section>
+      <section class="panel"><div class="panel-head"><div><h3>سجل التسديدات</h3><p>${payments.length} عملية محفوظة.</p></div></div><div class="table-wrap"><table><thead><tr><th>#</th><th>مبلغ التسديد</th><th>المبلغ الباقي</th><th>المستخدم</th><th>التاريخ</th><th>ملاحظة</th></tr></thead><tbody>${payments.map((payment,index)=>`<tr><td>${payments.length-index}</td><td><strong class="mono">${formatMoney(payment.amount)}</strong></td><td class="mono">${formatMoney(payment.remaining_amount_after)}</td><td>${escapeHtml(payment.paid_by_name)}</td><td>${formatDate(payment.paid_at,true)}</td><td>${escapeHtml(payment.notes || '-')}</td></tr>`).join('') || `<tr><td colspan="6"><div class="empty">لم يتم تسجيل أي تسديد بعد.</div></td></tr>`}</tbody></table></div></section>
+    </div>`);
+  document.getElementById('advance-detail-report')?.addEventListener('click', () => navigate(`/advances/${id}/report`));
+  document.getElementById('advance-detail-pay')?.addEventListener('click', () => openAdvancePaymentModal(advance, () => renderAdvanceDetails(id)));
+  document.getElementById('advance-detail-edit')?.addEventListener('click', () => openAdvanceForm(advance, () => renderAdvanceDetails(id)));
+  document.getElementById('advance-detail-delete')?.addEventListener('click', () => openAdvanceDeleteModal(advance, () => navigate('/advances')));
+}
+
 async function renderUsers() {
   pageLoading('المستخدمون');
   const users = await api('/api/users');
@@ -1454,7 +1705,7 @@ function openPermissionsModal(user, pages) {
   if (!user) return;
   const admin = user.role === 'admin';
   const allowed = new Set(user.page_permissions || []);
-  const options = pages.map(page => `<label class="permission-page-option ${admin || allowed.has(page.key) ? 'is-enabled' : ''}"><input type="checkbox" value="${escapeHtml(page.key)}" ${admin || allowed.has(page.key) ? 'checked' : ''} ${admin ? 'disabled' : ''}><span class="permission-page-icon">${page.key === 'dashboard' ? icon('dashboard') : page.key === 'loans' ? icon('loan') : icon('file')}</span><span><strong>${escapeHtml(page.name_ar)}</strong><small>${escapeHtml(page.category)}</small></span></label>`).join('');
+  const options = pages.map(page => `<label class="permission-page-option ${admin || allowed.has(page.key) ? 'is-enabled' : ''}"><input type="checkbox" value="${escapeHtml(page.key)}" ${admin || allowed.has(page.key) ? 'checked' : ''} ${admin ? 'disabled' : ''}><span class="permission-page-icon">${page.key === 'dashboard' ? icon('dashboard') : page.key === 'loans' ? icon('loan') : page.key === 'advances' ? icon('wallet') : icon('file')}</span><span><strong>${escapeHtml(page.name_ar)}</strong><small>${escapeHtml(page.category)}</small></span></label>`).join('');
   const footer = admin
     ? ['<button id="permissions-close" class="btn btn-primary">إغلاق</button>']
     : ['<button id="permissions-cancel" class="btn btn-secondary">إلغاء</button>', `<button id="permissions-save" class="btn btn-primary">${icon('save')} حفظ الصلاحيات</button>`];
@@ -1485,11 +1736,11 @@ async function renderAudit() {
   const actionNames = {
     'auth.login':'تسجيل دخول','auth.logout':'تسجيل خروج','auth.login_failed':'محاولة دخول فاشلة','auth.password_changed':'تغيير كلمة المرور','system.setup':'إعداد النظام',
     'document.create':'إنشاء مستند','document.update':'تعديل مستند','document.delete_permanent':'حذف مستند نهائياً','document.print_export':'طباعة/تصدير',
-    'attachment.upload':'رفع مرفق','attachment.delete':'حذف مرفق','attachment.update':'تعديل مرفق','loan.create':'إنشاء قرض','loan.update':'تعديل قرض','loan.payment':'تسديد قرض','loan.delete_permanent':'حذف قرض نهائياً','user.create':'إنشاء مستخدم','user.update':'تعديل مستخدم','permission.update':'تعديل صلاحيات الصفحات','system.backup':'إنشاء نسخة احتياطية'
+    'attachment.upload':'رفع مرفق','attachment.delete':'حذف مرفق','attachment.update':'تعديل مرفق','loan.create':'إنشاء قرض','loan.update':'تعديل قرض','loan.payment':'تسديد قرض','loan.delete_permanent':'حذف قرض نهائياً','advance.create':'إضافة سلفة','advance.update':'تعديل سلفة','advance.payment':'تسديد سلفة','advance.delete_permanent':'حذف سلفة نهائياً','user.create':'إنشاء مستخدم','user.update':'تعديل مستخدم','permission.update':'تعديل صلاحيات الصفحات','system.backup':'إنشاء نسخة احتياطية'
   };
-  const categoryOf = action => action.startsWith('document.') ? 'documents' : action.startsWith('attachment.') ? 'attachments' : action.startsWith('loan.') ? 'loans' : (action.startsWith('user.') || action.startsWith('permission.')) ? 'users' : action.startsWith('auth.') ? 'auth' : 'system';
+  const categoryOf = action => action.startsWith('document.') ? 'documents' : action.startsWith('attachment.') ? 'attachments' : action.startsWith('loan.') ? 'loans' : action.startsWith('advance.') ? 'advances' : (action.startsWith('user.') || action.startsWith('permission.')) ? 'users' : action.startsWith('auth.') ? 'auth' : 'system';
   const failedLogins = logs.filter(item => item.action === 'auth.login_failed').length;
-  const permanentDeletes = logs.filter(item => item.action === 'document.delete_permanent' || item.action === 'loan.delete_permanent').length;
+  const permanentDeletes = logs.filter(item => item.action === 'document.delete_permanent' || item.action === 'loan.delete_permanent' || item.action === 'advance.delete_permanent').length;
   const renderRows = items => {
     const body = document.getElementById('audit-rows');
     body.innerHTML = items.length ? items.map(log => `<tr><td>${formatDate(log.created_at, true)}</td><td>${escapeHtml(log.user_name || '-')}</td><td><strong>${escapeHtml(actionNames[log.action] || log.action)}</strong></td><td>${escapeHtml(log.entity_type)}</td><td class="mono">${escapeHtml(log.entity_id || '-')}</td><td><code class="audit-details">${escapeHtml(JSON.stringify(log.details))}</code></td></tr>`).join('') : `<tr><td colspan="6"><div class="empty"><div class="stat-icon">${icon('search')}</div><strong>لا توجد عمليات مطابقة</strong><p>غيّر البحث أو نوع العملية.</p></div></td></tr>`;
@@ -1497,7 +1748,7 @@ async function renderAudit() {
   shell('سجل العمليات', `
     <div class="page-header"><div><span class="eyebrow">الرقابة والتدقيق</span><h1>سجل العمليات</h1><p>سجل فعلي لجميع عمليات الدخول والإنشاء والتعديل والطباعة والمرفقات والحذف النهائي.</p></div></div>
     <div class="list-summary"><div class="summary-pill"><strong>${logs.length}</strong><span>عملية مسجلة</span></div><div class="summary-pill"><strong>${failedLogins}</strong><span>محاولة دخول فاشلة</span></div><div class="summary-pill"><strong>${permanentDeletes}</strong><span>حذف نهائي</span></div></div>
-    <div class="panel"><div class="document-toolbar"><div class="filters"><div class="search-box">${icon('search')}<input id="audit-search" class="control" placeholder="بحث بالمستخدم أو العملية أو المعرّف..."></div><select id="audit-category" class="control compact"><option value="">كل العمليات</option><option value="documents">المستندات</option><option value="attachments">المرفقات</option><option value="loans">القروض</option><option value="users">المستخدمون</option><option value="auth">الدخول والحساب</option><option value="system">النظام</option></select></div></div><div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>المستخدم</th><th>العملية</th><th>النوع</th><th>المعرّف</th><th>التفاصيل</th></tr></thead><tbody id="audit-rows"></tbody></table></div></div>`);
+    <div class="panel"><div class="document-toolbar"><div class="filters"><div class="search-box">${icon('search')}<input id="audit-search" class="control" placeholder="بحث بالمستخدم أو العملية أو المعرّف..."></div><select id="audit-category" class="control compact"><option value="">كل العمليات</option><option value="documents">المستندات</option><option value="attachments">المرفقات</option><option value="loans">القروض</option><option value="advances">السلف</option><option value="users">المستخدمون</option><option value="auth">الدخول والحساب</option><option value="system">النظام</option></select></div></div><div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>المستخدم</th><th>العملية</th><th>النوع</th><th>المعرّف</th><th>التفاصيل</th></tr></thead><tbody id="audit-rows"></tbody></table></div></div>`);
   const applyFilters = () => {
     const term = document.getElementById('audit-search').value.trim().toLowerCase();
     const category = document.getElementById('audit-category').value;
@@ -1590,6 +1841,11 @@ async function route() {
     if (loanReportMatch) { if (canViewPage('loans')) return renderLoanReport(Number(loanReportMatch[1])); return navigate(firstAllowedRoute()); }
     let loanMatch = path.match(/^\/loans\/(\d+)$/);
     if (loanMatch) { if (canViewPage('loans')) return renderLoanDetails(Number(loanMatch[1])); return navigate(firstAllowedRoute()); }
+    if (path === '/advances') { if (canViewPage('advances')) return renderAdvances(); return navigate(firstAllowedRoute()); }
+    let advanceReportMatch = path.match(/^\/advances\/(\d+)\/report$/);
+    if (advanceReportMatch) { if (canViewPage('advances')) return renderAdvanceReport(Number(advanceReportMatch[1])); return navigate(firstAllowedRoute()); }
+    let advanceMatch = path.match(/^\/advances\/(\d+)$/);
+    if (advanceMatch) { if (canViewPage('advances')) return renderAdvanceDetails(Number(advanceMatch[1])); return navigate(firstAllowedRoute()); }
     if (path === '/users' && state.user.role === 'admin') return renderUsers();
     if (path === '/permissions' && state.user.role === 'admin') return renderPermissions();
     if (path === '/reports' && state.user.role === 'admin') return renderReports();
