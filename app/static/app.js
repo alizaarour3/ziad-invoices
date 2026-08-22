@@ -305,7 +305,7 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
       <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-head">
-          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.19</span></div></div>
+          <div class="brand"><div class="brand-mark">ZD</div><div class="brand-text"><strong>نظام المستندات</strong><span>الإصدار 3.3.20</span></div></div>
           <button id="sidebar-close" class="btn btn-icon btn-link sidebar-close" aria-label="إغلاق القائمة">${icon('close')}</button>
         </div>
         <nav class="sidebar-nav">
@@ -1031,6 +1031,8 @@ function configureHtmlTemplateFrame(frame, doc, viewOnly) {
   frame.dataset.ready = '1';
   const saveButton = document.getElementById('save-document');
   if (saveButton) saveButton.disabled = false;
+  const convertButton = document.getElementById('convert-payment-request');
+  if (convertButton) convertButton.disabled = false;
 }
 
 function collectHtmlTemplateFields(frame, config) {
@@ -1048,6 +1050,71 @@ function collectHtmlTemplateFields(frame, config) {
   return result;
 }
 
+function paymentRequestConversionPreview(fields = {}) {
+  const purpose = String(fields.purpose || '').replace(/\n+/g, ' ').trim();
+  return `
+    <div class="conversion-summary">
+      <div class="conversion-route"><div class="conversion-node source">PR</div><div class="conversion-line">${icon('transfer')}</div><div class="conversion-node target">PV</div></div>
+      <div class="lock-note">سيتم حفظ طلب الصرف أولاً، ثم إنشاء مستند دفع محفوظ تلقائياً بنفس المعلومات المشتركة. الحقول الخاصة بمستند الدفع مثل اسم المستلم والمحاسب تبقى فارغة لإكمالها يدوياً.</div>
+      <div class="conversion-details">
+        <div><span>الدفع إلى</span><strong>${escapeHtml(fields.pay_to || '-')}</strong></div>
+        <div><span>المبلغ</span><strong>${displayDocumentAmount(fields.amount)} ${escapeHtml(fields.currency || '')}</strong></div>
+        <div class="wide"><span>الغرض</span><strong>${escapeHtml(purpose || '-')}</strong></div>
+      </div>
+    </div>`;
+}
+
+function openPaymentRequestConversion(doc, mode) {
+  let fields = doc.fields || {};
+  if (mode === 'edit') {
+    try { fields = {...fields, ...collectFields()}; }
+    catch (_) { /* The confirm action will surface the real loading error. */ }
+  }
+  showModal(
+    `تحويل ${doc.document_number} إلى مستند دفع`,
+    paymentRequestConversionPreview(fields),
+    [
+      '<button type="button" class="btn btn-secondary" id="convert-pr-cancel">إلغاء</button>',
+      `<button type="button" class="btn btn-convert" id="convert-pr-confirm">${icon('transfer')} إنشاء مستند الدفع</button>`,
+    ],
+  );
+  document.getElementById('convert-pr-cancel')?.addEventListener('click', closeModal);
+  document.getElementById('convert-pr-confirm')?.addEventListener('click', () => convertPaymentRequestToVoucher(doc, mode));
+}
+
+async function convertPaymentRequestToVoucher(doc, mode) {
+  const button = document.getElementById('convert-pr-confirm');
+  if (!button) return;
+  const original = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = '<span class="loader"></span> جارٍ التحويل';
+  try {
+    if (mode === 'edit') {
+      const fields = collectFields();
+      const savedSource = await api(`/api/documents/${doc.id}`, {
+        method:'PUT',
+        body:{status:'saved', fields},
+      });
+      state.currentDocument = savedSource;
+      state.dirty = false;
+    }
+    const paymentVoucher = await api(`/api/documents/${doc.id}/convert-to-payment-voucher`, {method:'POST'});
+    if (!paymentVoucher.already_converted) state.counts.PV = Number(state.counts.PV || 0) + 1;
+    closeModal();
+    toast(
+      paymentVoucher.already_converted
+        ? `يوجد مستند دفع مرتبط مسبقاً (${paymentVoucher.document_number}) وتم فتحه.`
+        : `تم إنشاء وحفظ ${paymentVoucher.document_number} من ${doc.document_number}.`,
+      'success',
+    );
+    navigate(`/documents/${paymentVoucher.id}/edit`);
+  } catch (err) {
+    toast(err.message, 'error');
+    button.disabled = false;
+    button.innerHTML = original;
+  }
+}
+
 async function renderDocumentEditor(id, mode) {
   pageLoading(mode === 'view' ? 'عرض المستند' : 'تعديل المستند');
   const doc = await api(`/api/documents/${id}`);
@@ -1062,11 +1129,14 @@ async function renderDocumentEditor(id, mode) {
   const useHtmlTemplate = doc.type.config.template_engine === 'html' && Boolean(doc.type.config.html_template);
   const fields = useHtmlTemplate ? '' : doc.type.config.fields.map(field => fieldHtml(field, doc.fields[field.key], viewOnly)).join('');
   const templateMarkup = useHtmlTemplate
-    ? `<iframe id="template-frame" class="html-template-frame" src="/form-templates/${encodeURIComponent(doc.type.config.html_template)}?v=3.3.19" title="${escapeHtml(doc.type.name_ar)}"></iframe>`
+    ? `<iframe id="template-frame" class="html-template-frame" src="/form-templates/${encodeURIComponent(doc.type.config.html_template)}?v=3.3.20" title="${escapeHtml(doc.type.name_ar)}"></iframe>`
     : `<img class="template-bg" src="${doc.type.image_url}" alt="${escapeHtml(doc.type.name_ar)}">${fields}`;
   const attachments = attachmentsHtml(doc.attachments || [], viewOnly);
   const primaryAction = viewOnly ? (state.user.role !== 'viewer' ? `<button id="edit-document" class="btn btn-primary">${icon('edit')} تعديل</button>` : '') : `<select id="document-status" class="control compact status-control"><option value="saved" ${doc.status === 'saved' ? 'selected' : ''}>محفوظ</option><option value="draft" ${doc.status === 'draft' ? 'selected' : ''}>مسودة</option></select><button id="save-document" class="btn btn-primary">${icon('save')} حفظ</button>`;
   const deleteAction = state.user.role === 'admin' ? `<button type="button" class="btn btn-danger-soft" id="delete-document" title="حذف المستند نهائياً">${icon('trash')}<span>حذف نهائي</span></button>` : '';
+  const conversionAction = doc.type.code === 'PR' && state.user.role !== 'viewer' && canViewPage('documents.PV')
+    ? `<button type="button" id="convert-payment-request" class="btn btn-convert" title="إنشاء مستند دفع من بيانات طلب الصرف">${icon('transfer')}<span>تحويل إلى مستند دفع</span></button>`
+    : '';
   const isTransferDocument = doc.type.code === 'TR';
   const transferMeta = isTransferDocument ? [
     doc.fields.date ? `<span>${icon('clock')} ${escapeHtml(doc.fields.date)}</span>` : '',
@@ -1078,7 +1148,7 @@ async function renderDocumentEditor(id, mode) {
     : `<div class="page-header document-header"><div><span class="eyebrow">${escapeHtml(doc.type.name_ar)}</span><h1>${escapeHtml(doc.document_number)}</h1><p>الكتابة في طبقة مستقلة، والقالب الرسمي يبقى دون تعديل.</p></div><div class="page-actions"><a class="btn btn-secondary" href="#/documents/${doc.type.code}">${icon('chevron')} رجوع للقائمة</a></div></div>`;
   shell(`${viewOnly ? 'عرض' : 'تعديل'} ${doc.type.name_ar}`, `
     ${editorHeader}
-    <div class="document-commandbar"><div class="commandbar-primary">${primaryAction}<button id="print-document" class="btn btn-secondary">${icon('print')} طباعة</button></div><div class="commandbar-secondary"><div class="template-zoom-controls" aria-label="تكبير وتصغير النموذج" dir="ltr"><button type="button" class="template-zoom-button" id="template-zoom-out" title="تصغير النموذج" aria-label="تصغير النموذج">−</button><span class="template-zoom-value" id="template-zoom-value">100%</span><button type="button" class="template-zoom-button" id="template-zoom-in" title="تكبير النموذج" aria-label="تكبير النموذج">+</button><button type="button" class="template-zoom-fit active" id="template-zoom-fit" title="إظهار النموذج كاملاً داخل الشاشة">ملاءمة</button></div>${!viewOnly ? `<label class="field-guide-toggle"><input id="field-guide" type="checkbox" checked><span>إظهار حدود الكتابة</span></label>` : ''}${deleteAction}</div></div>
+    <div class="document-commandbar"><div class="commandbar-primary">${primaryAction}<button id="print-document" class="btn btn-secondary">${icon('print')}<span>طباعة</span></button>${conversionAction}</div><div class="commandbar-secondary"><div class="template-zoom-controls" aria-label="تكبير وتصغير النموذج" dir="ltr"><button type="button" class="template-zoom-button" id="template-zoom-out" title="تصغير النموذج" aria-label="تصغير النموذج">−</button><span class="template-zoom-value" id="template-zoom-value">100%</span><button type="button" class="template-zoom-button" id="template-zoom-in" title="تكبير النموذج" aria-label="تكبير النموذج">+</button><button type="button" class="template-zoom-fit active" id="template-zoom-fit" title="إظهار النموذج كاملاً داخل الشاشة">ملاءمة</button></div>${!viewOnly ? `<label class="field-guide-toggle"><input id="field-guide" type="checkbox" checked><span>إظهار حدود الكتابة</span></label>` : ''}${deleteAction}</div></div>
     <div class="editor-grid"><div class="editor-stage"><div class="template-zoom-canvas" id="template-zoom-canvas"><div id="template-page" class="template-page ${useHtmlTemplate ? 'html-template-host' : ''} ${viewOnly ? 'view-only clean' : ''}">${templateMarkup}</div></div></div><aside class="editor-side">
       <section class="panel"><div class="panel-head"><h3>معلومات المستند</h3>${statusBadge(doc.status)}</div><div class="panel-body"><div class="lock-note">${icon('lock')} القالب الرسمي محفوظ كما هو، ولا يتم تعديل أي صورة أو خط أو نقطة داخله.</div><div class="meta-list" style="margin-top:14px"><div class="meta-row"><span>أنشأه</span><strong>${escapeHtml(doc.created_by_name)}</strong></div><div class="meta-row"><span>آخر تعديل</span><strong>${escapeHtml(doc.updated_by_name)}</strong></div><div class="meta-row"><span>تاريخ الإنشاء</span><strong>${formatDate(doc.created_at, true)}</strong></div><div class="meta-row"><span>الإصدار</span><strong>${doc.revision}</strong></div><div class="meta-row"><span>مرات الطباعة</span><strong>${doc.print_count}</strong></div></div></div></section>
       <section class="panel attachments-panel"><div class="panel-head"><div><h3>المرفقات</h3><p>${doc.attachments.length} ملف مرتبط</p></div><span class="badge badge-saved">${doc.attachments.length}</span></div><div class="panel-body">${!viewOnly ? `<div class="attachment-uploader" id="attachment-dropzone"><input id="attachment-input" type="file" multiple hidden><div class="attachment-uploader-icon">${icon('upload')}</div><div class="attachment-uploader-copy"><strong>إضافة مرفقات</strong><span>اسحب الملفات إلى هذه المساحة</span><small>PDF، Word، Excel والصور · حتى 100MB</small></div><button type="button" class="btn btn-primary attachment-browse" id="attachment-browse">اختيار ملفات</button></div><div id="attachment-upload-status" class="attachment-upload-status" hidden></div>` : ''}<div class="attachment-list-head"><span>الملفات المحفوظة</span></div><div class="attachments" id="attachments-list">${attachments}</div></div></section>
@@ -1088,6 +1158,8 @@ async function renderDocumentEditor(id, mode) {
   if (useHtmlTemplate && frame) {
     const saveButton = document.getElementById('save-document');
     if (saveButton) saveButton.disabled = true;
+    const convertButton = document.getElementById('convert-payment-request');
+    if (convertButton && !viewOnly) convertButton.disabled = true;
     const initializeFrame = () => {
       configureHtmlTemplateFrame(frame, doc, viewOnly);
       state.editorViewportFit?.();
@@ -1111,6 +1183,7 @@ async function renderDocumentEditor(id, mode) {
     else page.classList.toggle('clean', !event.target.checked);
   });
   document.getElementById('print-document').addEventListener('click', () => openPrintModal(state.currentDocument));
+  document.getElementById('convert-payment-request')?.addEventListener('click', () => openPaymentRequestConversion(doc, mode));
   document.getElementById('edit-document')?.addEventListener('click', () => navigate(`/documents/${id}/edit`));
   document.getElementById('delete-document')?.addEventListener('click', () => confirmDeleteDocument(id, doc.type.code));
   if (!viewOnly) {
@@ -1838,7 +1911,7 @@ async function renderAudit() {
   const logs = await api('/api/audit?limit=500');
   const actionNames = {
     'auth.login':'تسجيل دخول','auth.logout':'تسجيل خروج','auth.login_failed':'محاولة دخول فاشلة','auth.password_changed':'تغيير كلمة المرور','system.setup':'إعداد النظام',
-    'document.create':'إنشاء مستند','document.update':'تعديل مستند','document.delete_permanent':'حذف مستند نهائياً','document.print_export':'طباعة/تصدير',
+    'document.create':'إنشاء مستند','document.update':'تعديل مستند','document.convert_payment_request':'تحويل طلب صرف إلى مستند دفع','document.delete_permanent':'حذف مستند نهائياً','document.print_export':'طباعة/تصدير',
     'attachment.upload':'رفع مرفق','attachment.delete':'حذف مرفق','attachment.update':'تعديل مرفق','loan.create':'إنشاء قرض','loan.update':'تعديل قرض','loan.payment':'تسديد قرض','loan.delete_permanent':'حذف قرض نهائياً','advance.create':'إضافة سلفة','advance.update':'تعديل سلفة','advance.payment':'تسديد سلفة','advance.delete_permanent':'حذف سلفة نهائياً','user.create':'إنشاء مستخدم','user.update':'تعديل مستخدم','permission.update':'تعديل صلاحيات الصفحات','system.backup':'إنشاء نسخة احتياطية'
   };
   const categoryOf = action => action.startsWith('document.') ? 'documents' : action.startsWith('attachment.') ? 'attachments' : action.startsWith('loan.') ? 'loans' : action.startsWith('advance.') ? 'advances' : (action.startsWith('user.') || action.startsWith('permission.')) ? 'users' : action.startsWith('auth.') ? 'auth' : 'system';

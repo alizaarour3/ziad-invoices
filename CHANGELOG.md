@@ -1,3 +1,13 @@
+# v3.3.20 - Interface Polish + PR to PV Conversion
+
+- Standardized button geometry, spacing, icons, hover/focus states, and editor command-bar grouping across the application.
+- Added a `تحويل إلى مستند دفع` action beside Print on Payment Request documents for authorized non-viewer users.
+- Added an atomic server endpoint that converts a saved PR into a saved PV, mapping only semantically equivalent fields.
+- The generated PV stores the source PR number in `payment_request` and opens directly in edit mode for completion.
+- Duplicate PR-to-PV conversion is prevented by reusing the already-linked PV.
+- Conversion enforces both source-page and target PV-page permissions through the backend API.
+- No database migration. Official HTML templates remain byte-for-byte unchanged.
+
 # v3.3.19 - Exact 16pt Line Alignment
 
 - User-entered document data is exactly 16pt in the HTML editor and Chromium print path.

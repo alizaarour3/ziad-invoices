@@ -139,6 +139,97 @@ def test_full_document_lifecycle():
         assert client.get(f"/api/documents/{document['id']}", headers=headers).status_code == 404
 
 
+def test_payment_request_converts_to_saved_payment_voucher_without_duplicates():
+    with TestClient(app) as client:
+        client.post(
+            "/api/setup/admin",
+            json={"full_name": "Admin", "username": "admin", "password": "StrongPass123!"},
+        )
+        token = client.post(
+            "/api/auth/login",
+            json={"username": "admin", "password": "StrongPass123!"},
+        ).json()["token"]
+        headers = auth_headers(token)
+
+        request_doc = client.post(
+            "/api/documents",
+            headers=headers,
+            json={
+                "type_code": "PR",
+                "status": "saved",
+                "fields": {
+                    "date": "2026-08-22",
+                    "reference": "REF-44",
+                    "requester_name": "مقدم الطلب",
+                    "department": "المشتريات",
+                    "pay_to": "شركة المورد",
+                    "purpose": "دفعة مواد\nدفعة ثانية",
+                    "amount": "1750",
+                    "currency": "USD",
+                    "written_amount": "ألف وسبعمائة وخمسون دولاراً",
+                    "prepared_by": "مقدم الصرف",
+                    "verified_by": "المدير المباشر",
+                    "approval": "المدير",
+                },
+            },
+        )
+        assert request_doc.status_code == 201, request_doc.text
+        request_data = request_doc.json()
+        assert request_data["document_number"] == "PR-000001"
+
+        converted = client.post(
+            f"/api/documents/{request_data['id']}/convert-to-payment-voucher",
+            headers=headers,
+        )
+        assert converted.status_code == 200, converted.text
+        voucher = converted.json()
+        assert voucher["document_number"] == "PV-000001"
+        assert voucher["status"] == "saved"
+        assert voucher["already_converted"] is False
+        assert voucher["fields"]["payment_request"] == "PR-000001"
+        assert voucher["fields"]["date"] == "2026-08-22"
+        assert voucher["fields"]["reference"] == "REF-44"
+        assert voucher["fields"]["pay_to"] == "شركة المورد"
+        assert voucher["fields"]["purpose"] == "دفعة مواد\nدفعة ثانية"
+        assert voucher["fields"]["amount"] == "1750"
+        assert voucher["fields"]["currency"] == "USD"
+        assert voucher["fields"]["written_amount"] == "ألف وسبعمائة وخمسون دولاراً"
+        assert voucher["fields"]["approval"] == "المدير"
+        assert voucher["fields"]["receiver_name"] == ""
+        assert voucher["fields"]["accountant"] == ""
+
+        duplicate = client.post(
+            f"/api/documents/{request_data['id']}/convert-to-payment-voucher",
+            headers=headers,
+        )
+        assert duplicate.status_code == 200, duplicate.text
+        assert duplicate.json()["id"] == voucher["id"]
+        assert duplicate.json()["already_converted"] is True
+        vouchers = client.get("/api/documents?type_code=PV", headers=headers)
+        assert vouchers.status_code == 200
+        assert len(vouchers.json()) == 1
+
+        editor = client.post(
+            "/api/users",
+            headers=headers,
+            json={"full_name": "PR Editor", "username": "pr.editor", "password": "EditorPass123!", "role": "editor"},
+        ).json()
+        client.put(
+            f"/api/permissions/users/{editor['id']}",
+            headers=headers,
+            json={"page_keys": ["documents.PR"]},
+        )
+        editor_token = client.post(
+            "/api/auth/login",
+            json={"username": "pr.editor", "password": "EditorPass123!"},
+        ).json()["token"]
+        denied = client.post(
+            f"/api/documents/{request_data['id']}/convert-to-payment-voucher",
+            headers=auth_headers(editor_token),
+        )
+        assert denied.status_code == 403
+
+
 def test_users_and_permissions():
     with TestClient(app) as client:
         client.post("/api/setup/admin", json={"full_name": "Admin", "username": "admin", "password": "StrongPass123!"})
@@ -225,7 +316,7 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.19'
+        assert status_data['version'] == '3.3.20'
         assert status_data['database']['ok'] is True
         assert status_data['printing']['ready'] is True
         assert status_data['printing']['chromium'] is True
@@ -249,7 +340,7 @@ def test_system_status_and_backup():
             assert 'app/static/form-templates/receipt-voucher.html' in names
             assert 'app/static/form-templates/request-transfer.html' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.19'
+            assert manifest['version'] == '3.3.20'
             assert manifest['files']
 
 
@@ -276,7 +367,7 @@ def test_failed_login_attempts_never_lock_account_and_password_change():
             response = client.post('/api/auth/login', json={'username':'admin','password':'wrong-password'})
             assert response.status_code == 401
 
-        # v3.3.19 explicitly removes automatic account lockout. Even a stale
+        # v3.3.20 keeps automatic account lockout disabled. Even a stale
         # locked_until value left by an older release must not block a valid login.
         from app.db import connect
         conn = connect()

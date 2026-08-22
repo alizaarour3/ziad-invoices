@@ -415,6 +415,48 @@ def _safe_fields(type_row: Record, fields: dict[str, Any], document_number: str)
     return clean
 
 
+def _payment_voucher_fields_from_request(source_number: str, source_fields: dict[str, Any]) -> dict[str, Any]:
+    """Map only semantically equivalent fields from a payment request to a payment voucher.
+
+    Fields that do not have a direct equivalent in the payment voucher (department,
+    requester, prepared/verified signatures) are intentionally left blank rather than
+    guessing their meaning.
+    """
+    return {
+        "date": source_fields.get("date", ""),
+        "reference": source_fields.get("reference", ""),
+        "payment_request": source_number,
+        "pay_to": source_fields.get("pay_to", ""),
+        "purpose": source_fields.get("purpose", ""),
+        "amount": source_fields.get("amount", ""),
+        "currency": source_fields.get("currency", ""),
+        "written_amount": source_fields.get("written_amount", ""),
+        "receiver_name": "",
+        "accountant": "",
+        "approval": source_fields.get("approval", ""),
+    }
+
+
+def _existing_payment_voucher_for_request(conn: DBConnection, payment_request_number: str) -> Record | None:
+    rows = conn.execute(
+        """
+        SELECT d.id, d.field_values_json
+        FROM documents d
+        JOIN document_types dt ON dt.id=d.document_type_id
+        WHERE dt.code='PV'
+        ORDER BY d.id DESC
+        """
+    ).fetchall()
+    for row in rows:
+        try:
+            fields = json.loads(row["field_values_json"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if str(fields.get("payment_request", "")).strip() == payment_request_number.strip():
+            return conn.execute(DOCUMENT_SELECT + " WHERE d.id=?", (row["id"],)).fetchone()
+    return None
+
+
 def _attachment_dict(row: Record) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -852,6 +894,80 @@ def create_document(
             )
         row = conn.execute(DOCUMENT_SELECT + " WHERE d.id=?", (document_id,)).fetchone()
         return _document_dict(conn, row, include_attachments=True)
+    finally:
+        conn.close()
+
+
+@app.post("/api/documents/{document_id}/convert-to-payment-voucher")
+def convert_payment_request_to_payment_voucher(
+    document_id: int,
+    user: Annotated[CurrentUser, Depends(require("documents.create"))],
+):
+    conn = connect()
+    try:
+        _require_document_access(conn, user, document_id)
+        _require_document_code_access(conn, user, "PV")
+        source = conn.execute(DOCUMENT_SELECT + " WHERE d.id=?", (document_id,)).fetchone()
+        if not source:
+            raise HTTPException(status_code=404, detail="المستند غير موجود")
+        if str(source["type_code"]).upper() != "PR":
+            raise HTTPException(status_code=422, detail="التحويل إلى مستند دفع متاح فقط من طلب صرف")
+
+        existing = _existing_payment_voucher_for_request(conn, str(source["document_number"]))
+        if existing:
+            result = _document_dict(conn, existing, include_attachments=True)
+            result["already_converted"] = True
+            result["source_document_id"] = document_id
+            return result
+
+        source_fields = json.loads(source["field_values_json"])
+        with transaction(conn, immediate=True):
+            target_type = _load_type(conn, "PV")
+            sequence_sql = "SELECT next_value FROM number_sequences WHERE document_type_id=?"
+            if conn.is_postgres:
+                sequence_sql += " FOR UPDATE"
+            sequence = conn.execute(sequence_sql, (target_type["id"],)).fetchone()
+            next_value = int(sequence["next_value"])
+            document_number = f"{target_type['prefix']}-{next_value:06d}"
+            conn.execute(
+                "UPDATE number_sequences SET next_value=? WHERE document_type_id=?",
+                (next_value + 1, target_type["id"]),
+            )
+            mapped = _payment_voucher_fields_from_request(str(source["document_number"]), source_fields)
+            fields = _safe_fields(target_type, mapped, document_number)
+            fields_json = json.dumps(fields, ensure_ascii=False, separators=(",", ":"))
+            now = utc_iso()
+            cursor = conn.execute(
+                """
+                INSERT INTO documents(document_type_id, document_number, status, field_values_json,
+                                      created_by, updated_by, created_at, updated_at)
+                VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (target_type["id"], document_number, "saved", fields_json, user.id, user.id, now, now),
+            )
+            target_id = cursor.lastrowid
+            conn.execute(
+                "INSERT INTO document_revisions(document_id, revision, field_values_json, changed_by, changed_at) VALUES(?,1,?,?,?)",
+                (target_id, fields_json, user.id, now),
+            )
+            audit(
+                conn,
+                user_id=user.id,
+                action="document.convert_payment_request",
+                entity_type="document",
+                entity_id=target_id,
+                details={
+                    "source_document_id": document_id,
+                    "source_document_number": source["document_number"],
+                    "target_document_number": document_number,
+                },
+            )
+
+        created = conn.execute(DOCUMENT_SELECT + " WHERE d.id=?", (target_id,)).fetchone()
+        result = _document_dict(conn, created, include_attachments=True)
+        result["already_converted"] = False
+        result["source_document_id"] = document_id
+        return result
     finally:
         conn.close()
 
