@@ -1,0 +1,21 @@
+Ziad Invoices v3.3.24 - Validation Report
+
+PASS - Python patch script compiles with py_compile.
+PASS - Generated JavaScript passes `node --check`.
+PASS - Exact PR -> PV map contains only 6 entries:
+       pay_to -> pay_to
+       purpose -> purpose
+       amount -> amount
+       currency -> currency
+       written_amount -> written_amount
+       approval -> approval
+PASS - document_number/payment_request, date and reference are not in the transfer map.
+PASS - The six mapped PR values replace stale/default values in their matching PV fields.
+PASS - description_of_purpose remains recognized as the source alias for purpose.
+PASS - currancy remains recognized as an alias for currency.
+PASS - v3.3.23 above-line Payment Voucher alignment settings are retained.
+PASS - v3.3.23 footer sentence removal/masking is retained.
+PASS - Existing v3.3.23 static fix files are overwritten by v3.3.24 without duplicate HTML script/style injection.
+PASS - Re-running the v3.3.24 installer is idempotent for the HTML injection and field position configuration.
+
+Scope note: final visual confirmation of exact printed placement should still be performed in the user's actual Windows project/template because the patch package does not contain the complete production project/database.

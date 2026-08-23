@@ -1,0 +1,22 @@
+Ziad Invoices v3.3.24 - Exact PR -> PV Mapping Test
+
+1. Open Payment Request / طلب صرف.
+2. Enter clearly different test values in:
+   - Pay to
+   - Description of purpose
+   - Amount
+   - Currency
+   - Written amount
+   - Approval
+3. Also fill Date, Reference, Requester, Department and payment method with obvious values.
+4. Convert the request to Payment Voucher / مستند دفع.
+5. Confirm EXACTLY:
+   PR Pay to                 -> PV Pay to
+   PR Description of purpose -> PV Purpose
+   PR Amount                 -> PV Amount
+   PR Currency               -> PV Currency
+   PR Written amount         -> PV Written amount
+   PR Approval               -> PV Approval
+6. Confirm the runtime transfer does not copy the other PR-only fields.
+7. Confirm Pay to, Purpose and Written amount still print directly above their ruled lines.
+8. Confirm the removed footer sentence has not returned.
