@@ -1,0 +1,39 @@
+/* Ziad Invoices v3.3.30 - HTML template-first runtime */
+.template-page.ziad-html-template-host {
+  position: relative !important;
+  overflow: hidden !important;
+  background: #fff !important;
+  isolation: isolate;
+}
+.template-page.ziad-html-template-host > .template-bg,
+.template-page.ziad-html-template-host > .template-field,
+.template-page.ziad-html-template-host > .template-checkbox {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.ziad-html-template-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  display: block;
+  z-index: 20;
+}
+.ziad-html-template-badge {
+  position: absolute;
+  inset-inline-start: 10px;
+  top: 10px;
+  z-index: 30;
+  background: rgba(15,23,42,.92);
+  color: #e2e8f0;
+  border: 1px solid rgba(148,163,184,.35);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font: 600 11px/1.2 Arial,Tahoma,sans-serif;
+  pointer-events: none;
+  opacity: 0;
+}

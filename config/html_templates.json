@@ -1,0 +1,11 @@
+{
+  "version": "3.3.30",
+  "mode": "HTML_TEMPLATE_FIRST",
+  "templates": {
+    "PR": "/static/form-templates/payment-request.html",
+    "PV": "/static/form-templates/payment-voucher.html",
+    "TRANSFER": "/static/form-templates/request-transfer.html",
+    "CAR_MAINTENANCE": "/static/form-templates/car-maintenance.html"
+  },
+  "notes": "Use the user-supplied HTML templates as the live editor/print surface instead of the legacy image surface. Original HTML bytes are copied unchanged."
+}
