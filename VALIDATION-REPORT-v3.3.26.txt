@@ -1,0 +1,39 @@
+Ziad Invoices v3.3.26 - Premium UI Only Validation
+===================================================
+
+Design source: DESIGN-SOURCE.md
+UI file: app/static/premium-system-v3.3.26.css
+
+PASS - Python installer compiles.
+PASS - Python rollback script compiles.
+PASS - CSS parsed with tinycss2 with zero top-level parse errors.
+PASS - No zoom value below 1 detected.
+PASS - No transform: scale(...) below 1 detected.
+PASS - No CSS scale property below 1 detected.
+PASS - Installer replaces v3.3.25 theme link instead of stacking themes.
+PASS - Installer is idempotent (one v3.3.26 link after repeated run).
+PASS - Template fixture hash before: a8e6140281d471cded43677f10278148347d2342dc64e1e114a36f8c60624a45
+PASS - Template fixture hash after : a8e6140281d471cded43677f10278148347d2342dc64e1e114a36f8c60624a45
+PASS - Protected template fixture remains byte-for-byte unchanged.
+PASS - Active v3.3.26 stylesheet link count after repeated install: 1
+
+Files allowed to change on installation:
+- app/static/index.html (stylesheet link only; backup created first)
+- app/static/premium-system-v3.3.26.css (new UI-only stylesheet)
+
+Protected content NOT modified:
+- templates/**
+- app/templates/**
+- app/static/templates/**
+- app/static/form-templates/**
+- app/static/*.html except index.html
+- Voucher/request field positions and print/PDF layouts
+
+Targeted UI fix:
+- Legacy/raw system inputs, including the repayment "المبلغ المحدد" area,
+  now inherit the Technical-Premium design even when they do not carry
+  the .control class.
+
+Scale policy:
+- Application remains at 100% real size.
+- Responsive behavior uses reflow only, not zoom-out or scale-down.

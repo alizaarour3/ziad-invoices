@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ziad Invoices v3.3.26 UI Preview</title>
+<link rel="stylesheet" href="app/static/premium-system-v3.3.26.css">
+<style>
+*{box-sizing:border-box}body{margin:0}.preview{min-height:100vh;background:#11131b;color:#e1e2ed;font-family:Arial,sans-serif;padding:32px}.modal{max-width:620px;margin:30px auto}.modal-head,.modal-body,.modal-foot{display:block}.modal-head{display:flex;align-items:center;justify-content:space-between}.demo-field{display:grid;gap:7px;margin-bottom:16px}.modal-foot{display:flex;gap:8px;justify-content:flex-start}.btn{display:inline-flex;align-items:center;justify-content:center;padding:0 16px;min-height:44px}.btn-primary{background:#2563eb;color:#fff}.btn-secondary{background:#282a32;color:#e1e2ed;border:1px solid #434655}.control{width:100%}
+</style>
+</head>
+<body>
+<div id="app"><main class="content preview">
+  <section class="modal" role="dialog" aria-label="تسجيل تسديد">
+    <header class="modal-head"><h3>تسجيل تسديد</h3><span class="badge">القروض والسلف</span></header>
+    <div class="modal-body">
+      <div class="demo-field form-field">
+        <label for="amount">المبلغ المحدد</label>
+        <input id="amount" type="number" placeholder="الحد الأدنى لكل تسديد">
+        <small>لا يمكن تسجيل تسديد أقل من هذا المبلغ، إلا إذا كان المبلغ المتبقي النهائي أقل منه.</small>
+      </div>
+      <div class="demo-field form-field">
+        <label for="note">ملاحظة</label>
+        <textarea id="note" placeholder="اكتب ملاحظة اختيارية"></textarea>
+      </div>
+    </div>
+    <footer class="modal-foot"><button class="btn btn-primary">حفظ التسديد</button><button class="btn btn-secondary">إلغاء</button></footer>
+  </section>
+</main></div>
+</body>
+</html>

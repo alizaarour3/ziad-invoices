@@ -1,0 +1,16 @@
+Ziad Invoices v3.3.25 Premium System UI - validation goals
+
+[1] SYSTEM DESIGN ONLY
+    PASS target: app/static/index.html link + new premium-system-v3.3.25.css only.
+
+[2] VOUCHER TEMPLATE PROTECTION
+    PASS target: installer hashes template/form-template directories and non-index HTML templates before/after.
+
+[3] NO ZOOM OUT
+    PASS target: html/body/#app/app-shell/auth-shell at zoom 1; no application scale-down rule.
+
+[4] DOCUMENT EDITOR SAFETY
+    PASS target: premium stylesheet contains no active selector blocks for template-page/template-field/template-bg classes.
+
+[5] DESIGN.md TOKENS
+    PASS target: #11131b base, layered slate surfaces, #2563eb primary, technical outlines, 6-12px controlled radii.

@@ -1,0 +1,1674 @@
+/*
+  Ziad Invoices Professional UI v3.3.26
+  Premium System Theme
+
+  IMPORTANT SAFETY RULE:
+  This stylesheet is for the application chrome/UI only.
+  It intentionally does NOT style:
+    .template-page
+    .template-bg
+    .template-field
+    .template-line-field
+    .template-checkbox
+  and it is linked only from app/static/index.html.
+  Official voucher/request templates remain untouched.
+*/
+
+:root {
+  --ziad-ui-bg: #11131b;
+  --ziad-ui-surface-lowest: #0c0e16;
+  --ziad-ui-surface-low: #191b23;
+  --ziad-ui-surface: #1d1f27;
+  --ziad-ui-surface-high: #282a32;
+  --ziad-ui-surface-highest: #32343d;
+  --ziad-ui-text: #e1e2ed;
+  --ziad-ui-text-2: #c3c6d7;
+  --ziad-ui-muted: #9297aa;
+  --ziad-ui-outline: #434655;
+  --ziad-ui-outline-strong: #666a7c;
+  --ziad-ui-primary: #2563eb;
+  --ziad-ui-primary-hover: #3474f4;
+  --ziad-ui-primary-soft: rgba(37, 99, 235, 0.14);
+  --ziad-ui-primary-softer: rgba(37, 99, 235, 0.08);
+  --ziad-ui-primary-text: #eef2ff;
+  --ziad-ui-success: #41d39a;
+  --ziad-ui-success-soft: rgba(65, 211, 154, 0.12);
+  --ziad-ui-warning: #ffb596;
+  --ziad-ui-warning-soft: rgba(255, 181, 150, 0.12);
+  --ziad-ui-danger: #ffb4ab;
+  --ziad-ui-danger-soft: rgba(255, 180, 171, 0.12);
+  --ziad-ui-radius-sm: 6px;
+  --ziad-ui-radius: 8px;
+  --ziad-ui-radius-card: 12px;
+  --ziad-ui-font: "Geist", "Noto Sans Arabic", "Segoe UI", Tahoma, Arial, sans-serif;
+  --ziad-ui-mono: "Geist Mono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+}
+
+/* --------------------------------------------------------------------------
+   100% SIZE / NO APP-LEVEL ZOOM OUT
+   -------------------------------------------------------------------------- */
+html,
+body {
+  margin: 0 !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  min-height: 100% !important;
+  background: var(--ziad-ui-bg) !important;
+  zoom: 1 !important;
+}
+
+#app {
+  width: 100% !important;
+  min-height: 100vh !important;
+  zoom: 1 !important;
+  transform: none !important;
+  transform-origin: center center !important;
+}
+
+.app-shell,
+.auth-shell {
+  zoom: 1 !important;
+  transform: none !important;
+  transform-origin: center center !important;
+}
+
+/* Compatibility with the earlier login 100% size lock. */
+html.ziad-login-size-lock,
+html.ziad-login-size-lock body,
+html.ziad-login-size-lock #app,
+html.ziad-login-size-lock .ziad-login-layout-lock {
+  zoom: 1 !important;
+  transform: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   TYPOGRAPHY - UI ONLY (never applied to template-page)
+   -------------------------------------------------------------------------- */
+.sidebar,
+.topbar,
+.page-header,
+.dashboard-section,
+.stat-card,
+.type-overview-card,
+.panel,
+.document-commandbar,
+.editor-side,
+.list-summary,
+.modal,
+.auth-panel,
+.auth-visual,
+#toast-root,
+.btn,
+.control,
+.badge,
+.summary-pill,
+.search-box,
+.user-chip,
+.topbar-user,
+.table-wrap,
+.settings-layout {
+  font-family: var(--ziad-ui-font) !important;
+}
+
+.mono,
+.audit-details {
+  font-family: var(--ziad-ui-mono) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------------
+   APPLICATION SHELL
+   -------------------------------------------------------------------------- */
+.app-shell {
+  min-height: 100vh !important;
+  background: var(--ziad-ui-bg) !important;
+  color: var(--ziad-ui-text) !important;
+}
+
+.main {
+  min-width: 0 !important;
+  min-height: 100vh !important;
+  background:
+    radial-gradient(circle at 88% 0%, rgba(37, 99, 235, 0.06), transparent 28rem),
+    var(--ziad-ui-bg) !important;
+}
+
+.content {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  padding: 28px 30px 48px !important;
+}
+
+/* --------------------------------------------------------------------------
+   SIDEBAR
+   -------------------------------------------------------------------------- */
+.sidebar {
+  background: var(--ziad-ui-surface-lowest) !important;
+  color: var(--ziad-ui-text) !important;
+  border-inline-end: 1px solid #242735 !important;
+  box-shadow: none !important;
+}
+
+.sidebar-head {
+  min-height: 76px !important;
+  padding: 16px 18px !important;
+  border-bottom: 1px solid #242735 !important;
+  box-sizing: border-box !important;
+}
+
+.sidebar .brand {
+  gap: 12px !important;
+  min-width: 0 !important;
+}
+
+.sidebar .brand-mark,
+.auth-panel .brand-mark {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 11px !important;
+  background: linear-gradient(145deg, #3474f4, #1d4ed8) !important;
+  color: #fff !important;
+  border: 1px solid rgba(180, 197, 255, 0.25) !important;
+  box-shadow: none !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.03em !important;
+}
+
+.sidebar .brand-text strong,
+.auth-panel .brand-text strong {
+  color: var(--ziad-ui-text) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.sidebar .brand-text span,
+.auth-panel .brand-text span {
+  color: var(--ziad-ui-muted) !important;
+  font-size: 11px !important;
+}
+
+.sidebar-nav {
+  padding: 16px 12px 20px !important;
+}
+
+.nav-label {
+  color: #73798d !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  padding: 16px 10px 7px !important;
+}
+
+.nav-item {
+  position: relative !important;
+  min-height: 44px !important;
+  margin: 3px 0 !important;
+  padding: 0 11px !important;
+  gap: 10px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  color: #aeb3c5 !important;
+  background: transparent !important;
+  text-decoration: none !important;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease !important;
+}
+
+.nav-item:hover {
+  color: var(--ziad-ui-text) !important;
+  background: var(--ziad-ui-surface-low) !important;
+  border-color: #2b2e3a !important;
+}
+
+.nav-item.active {
+  color: #f5f7ff !important;
+  background: var(--ziad-ui-primary-soft) !important;
+  border-color: rgba(37, 99, 235, 0.52) !important;
+}
+
+.nav-item.active::before {
+  content: "" !important;
+  position: absolute !important;
+  inset-block: 9px !important;
+  inset-inline-start: -1px !important;
+  width: 3px !important;
+  border-radius: 999px !important;
+  background: #5b8cff !important;
+}
+
+.nav-item .icon {
+  width: 18px !important;
+  height: 18px !important;
+  flex: 0 0 18px !important;
+}
+
+.nav-badge {
+  margin-inline-start: auto !important;
+  min-width: 24px !important;
+  height: 22px !important;
+  padding-inline: 7px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 999px !important;
+  background: var(--ziad-ui-surface-high) !important;
+  border: 1px solid #3a3d49 !important;
+  color: #c7cada !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+.sidebar-footer {
+  padding: 12px !important;
+  border-top: 1px solid #242735 !important;
+  background: #0e1018 !important;
+}
+
+.user-chip {
+  padding: 9px !important;
+  border: 1px solid #2c2f3b !important;
+  border-radius: 10px !important;
+  background: var(--ziad-ui-surface-low) !important;
+}
+
+.avatar {
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 9px !important;
+  background: #29345d !important;
+  color: #dbe5ff !important;
+  border: 1px solid #3f4f89 !important;
+  font-weight: 700 !important;
+}
+
+.user-chip-copy strong,
+.topbar-user span {
+  color: var(--ziad-ui-text) !important;
+}
+
+.user-chip-copy span {
+  color: var(--ziad-ui-muted) !important;
+}
+
+/* --------------------------------------------------------------------------
+   TOP BAR
+   -------------------------------------------------------------------------- */
+.topbar {
+  min-height: 68px !important;
+  height: 68px !important;
+  padding: 0 24px !important;
+  background: rgba(17, 19, 27, 0.94) !important;
+  border-bottom: 1px solid #282b37 !important;
+  box-shadow: none !important;
+  backdrop-filter: saturate(130%) blur(12px) !important;
+  -webkit-backdrop-filter: saturate(130%) blur(12px) !important;
+}
+
+.topbar-title {
+  color: var(--ziad-ui-text) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.topbar-user {
+  gap: 9px !important;
+  padding: 6px 9px !important;
+  border: 1px solid #30333f !important;
+  border-radius: 9px !important;
+  background: var(--ziad-ui-surface-low) !important;
+}
+
+.avatar.small {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 7px !important;
+  font-size: 11px !important;
+}
+
+/* --------------------------------------------------------------------------
+   PAGE HEADERS
+   -------------------------------------------------------------------------- */
+.page-header {
+  align-items: flex-end !important;
+  gap: 20px !important;
+  margin-bottom: 24px !important;
+  padding: 4px 2px 20px !important;
+  border-bottom: 1px solid #2a2d38 !important;
+}
+
+.page-header h1 {
+  margin: 5px 0 7px !important;
+  color: #f1f3fb !important;
+  font-size: clamp(25px, 2vw, 32px) !important;
+  line-height: 1.25 !important;
+  font-weight: 720 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.page-header p,
+.section-heading p,
+.panel-head p {
+  color: var(--ziad-ui-muted) !important;
+  line-height: 1.65 !important;
+}
+
+.eyebrow {
+  display: inline-flex !important;
+  align-items: center !important;
+  min-height: 24px !important;
+  padding: 0 8px !important;
+  border: 1px solid rgba(91, 140, 255, 0.26) !important;
+  border-radius: 6px !important;
+  background: var(--ziad-ui-primary-softer) !important;
+  color: #9db8ff !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+}
+
+.page-actions {
+  gap: 8px !important;
+}
+
+/* --------------------------------------------------------------------------
+   BUTTONS
+   -------------------------------------------------------------------------- */
+.btn {
+  min-height: 40px !important;
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 0 14px !important;
+  border-radius: 8px !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  line-height: 1 !important;
+  font-weight: 650 !important;
+  transition: background-color 130ms ease, border-color 130ms ease, color 130ms ease, opacity 130ms ease !important;
+}
+
+.btn .icon {
+  width: 17px !important;
+  height: 17px !important;
+}
+
+.btn-primary {
+  color: #fff !important;
+  background: var(--ziad-ui-primary) !important;
+  border-color: #3975ee !important;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--ziad-ui-primary-hover) !important;
+  border-color: #6d9aff !important;
+}
+
+.btn-secondary {
+  color: #d8dae5 !important;
+  background: var(--ziad-ui-surface-low) !important;
+  border-color: #3b3e4b !important;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  color: #f2f4fb !important;
+  background: var(--ziad-ui-surface-high) !important;
+  border-color: #606477 !important;
+}
+
+.btn-link {
+  color: #aeb3c6 !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.btn-link:hover:not(:disabled) {
+  color: #fff !important;
+  background: #22252e !important;
+}
+
+.btn-danger-soft {
+  color: var(--ziad-ui-danger) !important;
+  background: var(--ziad-ui-danger-soft) !important;
+  border-color: rgba(255, 180, 171, 0.26) !important;
+}
+
+.btn-danger-soft:hover:not(:disabled) {
+  background: rgba(255, 180, 171, 0.18) !important;
+  border-color: rgba(255, 180, 171, 0.44) !important;
+}
+
+.btn-icon {
+  width: 40px !important;
+  min-width: 40px !important;
+  padding: 0 !important;
+}
+
+.btn-lg {
+  min-height: 48px !important;
+  padding-inline: 18px !important;
+  font-size: 14px !important;
+}
+
+.btn:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* --------------------------------------------------------------------------
+   FORMS / CONTROLS
+   -------------------------------------------------------------------------- */
+.form-grid {
+  gap: 16px !important;
+}
+
+.form-row {
+  gap: 7px !important;
+}
+
+.form-row label {
+  color: #c9ccda !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+}
+
+.control {
+  min-height: 44px !important;
+  box-sizing: border-box !important;
+  padding: 0 12px !important;
+  border: 1px solid #3b3f4c !important;
+  border-radius: 8px !important;
+  outline: none !important;
+  background: var(--ziad-ui-surface-lowest) !important;
+  color: #e5e7f0 !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  transition: border-color 120ms ease, background-color 120ms ease !important;
+}
+
+textarea.control {
+  min-height: 112px !important;
+  padding-block: 11px !important;
+  line-height: 1.6 !important;
+  resize: vertical !important;
+}
+
+.control::placeholder {
+  color: #74798b !important;
+  opacity: 1 !important;
+}
+
+.control:hover:not(:disabled) {
+  border-color: #55596a !important;
+  background: #10121b !important;
+}
+
+.control:focus {
+  border-color: #4d82f5 !important;
+  background: #0d1019 !important;
+  box-shadow: none !important;
+}
+
+.control:disabled {
+  opacity: 0.64 !important;
+  color: #a5a9b8 !important;
+  background: #171922 !important;
+}
+
+.control.compact {
+  min-height: 40px !important;
+}
+
+.help {
+  color: #7f8496 !important;
+  font-size: 11px !important;
+}
+
+.error-text {
+  color: var(--ziad-ui-danger) !important;
+  font-size: 12px !important;
+}
+
+.search-box {
+  min-height: 42px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding-inline: 11px !important;
+  border: 1px solid #383b48 !important;
+  border-radius: 8px !important;
+  background: var(--ziad-ui-surface-lowest) !important;
+  color: #7e8498 !important;
+}
+
+.search-box .control {
+  min-height: 38px !important;
+  border: 0 !important;
+  padding-inline: 0 !important;
+  background: transparent !important;
+}
+
+.search-box:focus-within {
+  border-color: #4d82f5 !important;
+}
+
+.filters,
+.document-toolbar {
+  gap: 10px !important;
+}
+
+/* --------------------------------------------------------------------------
+   PANELS / CARDS
+   -------------------------------------------------------------------------- */
+.panel {
+  overflow: hidden !important;
+  border: 1px solid #30333f !important;
+  border-radius: 12px !important;
+  background: var(--ziad-ui-surface-low) !important;
+  color: var(--ziad-ui-text) !important;
+  box-shadow: none !important;
+}
+
+.panel-head {
+  min-height: 60px !important;
+  padding: 15px 18px !important;
+  border-bottom: 1px solid #30333f !important;
+  background: rgba(29, 31, 39, 0.68) !important;
+}
+
+.panel-head h2,
+.panel-head h3,
+.section-heading h2 {
+  color: #e9ebf4 !important;
+  font-weight: 680 !important;
+}
+
+.panel-head h2 {
+  font-size: 16px !important;
+}
+
+.panel-head h3 {
+  font-size: 14px !important;
+}
+
+.panel-head p {
+  margin-top: 4px !important;
+  font-size: 11px !important;
+}
+
+.panel-body {
+  padding: 18px !important;
+}
+
+.cards.dashboard-cards {
+  gap: 14px !important;
+  margin-bottom: 28px !important;
+}
+
+.stat-card {
+  min-height: 142px !important;
+  padding: 20px !important;
+  border: 1px solid #30333f !important;
+  border-radius: 12px !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.012), transparent 70%),
+    var(--ziad-ui-surface-low) !important;
+  color: var(--ziad-ui-text) !important;
+  box-shadow: none !important;
+  transition: border-color 140ms ease, background-color 140ms ease !important;
+}
+
+.stat-card:hover {
+  border-color: #454958 !important;
+  background: var(--ziad-ui-surface) !important;
+}
+
+.stat-card > strong {
+  color: #f2f4fb !important;
+  font-size: 30px !important;
+  line-height: 1.1 !important;
+  font-weight: 720 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card > span,
+.stat-top > span {
+  color: #9aa0b2 !important;
+}
+
+.stat-top > span {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.stat-icon {
+  width: 36px !important;
+  height: 36px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 9px !important;
+  border: 1px solid rgba(91, 140, 255, 0.28) !important;
+  background: var(--ziad-ui-primary-soft) !important;
+  color: #8eadff !important;
+}
+
+.stat-icon.warning {
+  color: var(--ziad-ui-warning) !important;
+  background: var(--ziad-ui-warning-soft) !important;
+  border-color: rgba(255, 181, 150, 0.25) !important;
+}
+
+.stat-icon.accent {
+  color: var(--ziad-ui-success) !important;
+  background: var(--ziad-ui-success-soft) !important;
+  border-color: rgba(65, 211, 154, 0.22) !important;
+}
+
+.dashboard-section {
+  margin-block: 28px !important;
+}
+
+.section-heading {
+  margin-bottom: 13px !important;
+}
+
+.type-overview-grid {
+  gap: 11px !important;
+}
+
+.type-overview-card {
+  min-height: 72px !important;
+  padding: 12px 14px !important;
+  border: 1px solid #30333f !important;
+  border-radius: 10px !important;
+  background: var(--ziad-ui-surface-low) !important;
+  color: var(--ziad-ui-text) !important;
+  text-decoration: none !important;
+  box-shadow: none !important;
+  transition: background-color 130ms ease, border-color 130ms ease !important;
+}
+
+.type-overview-card:hover {
+  background: var(--ziad-ui-surface) !important;
+  border-color: rgba(91, 140, 255, 0.48) !important;
+}
+
+.type-overview-icon {
+  width: 38px !important;
+  height: 38px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 9px !important;
+  color: #8eacff !important;
+  background: var(--ziad-ui-primary-soft) !important;
+  border: 1px solid rgba(91, 140, 255, 0.23) !important;
+}
+
+.type-overview-copy strong {
+  color: #e8eaf3 !important;
+  font-size: 13px !important;
+}
+
+.type-overview-copy span {
+  color: #858b9d !important;
+  font-size: 11px !important;
+}
+
+.type-overview-count {
+  min-width: 36px !important;
+  height: 30px !important;
+  padding-inline: 9px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 7px !important;
+  background: #222633 !important;
+  border: 1px solid #353a4b !important;
+  color: #d5daf0 !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.dashboard-grid {
+  gap: 14px !important;
+}
+
+/* --------------------------------------------------------------------------
+   TABLES / DATA GRID
+   -------------------------------------------------------------------------- */
+.table-wrap {
+  overflow: auto !important;
+  background: var(--ziad-ui-surface-low) !important;
+}
+
+.table-wrap table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  color: #d9dbe6 !important;
+  font-size: 12px !important;
+}
+
+.table-wrap thead th {
+  height: 42px !important;
+  padding: 0 14px !important;
+  border-bottom: 1px solid #3a3d49 !important;
+  background: #1f212a !important;
+  color: #9ea4b6 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em !important;
+  white-space: nowrap !important;
+}
+
+.table-wrap tbody td {
+  height: 48px !important;
+  padding: 7px 14px !important;
+  border-bottom: 1px solid #292c36 !important;
+  color: #cfd2df !important;
+  vertical-align: middle !important;
+}
+
+.table-wrap tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.018) !important;
+}
+
+.table-wrap tbody tr:hover td {
+  background: rgba(91, 140, 255, 0.055) !important;
+}
+
+.table-wrap tbody tr:last-child td {
+  border-bottom: 0 !important;
+}
+
+.table-wrap td strong {
+  color: #edf0f8 !important;
+}
+
+.row-actions {
+  gap: 6px !important;
+}
+
+.row-action,
+.attachment-action {
+  min-height: 34px !important;
+  padding-inline: 9px !important;
+  font-size: 11px !important;
+}
+
+/* --------------------------------------------------------------------------
+   BADGES / SUMMARIES
+   -------------------------------------------------------------------------- */
+.badge {
+  min-height: 24px !important;
+  padding: 0 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
+  border: 1px solid #424654 !important;
+  background: #272a34 !important;
+  color: #cfd2df !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+.badge-saved {
+  color: #8ce8bd !important;
+  background: var(--ziad-ui-success-soft) !important;
+  border-color: rgba(65, 211, 154, 0.24) !important;
+}
+
+.badge-draft {
+  color: #ffc6ae !important;
+  background: var(--ziad-ui-warning-soft) !important;
+  border-color: rgba(255, 181, 150, 0.24) !important;
+}
+
+.badge-admin {
+  color: #a9c0ff !important;
+  background: var(--ziad-ui-primary-soft) !important;
+  border-color: rgba(91, 140, 255, 0.25) !important;
+}
+
+.list-summary {
+  gap: 10px !important;
+  margin-bottom: 16px !important;
+}
+
+.summary-pill {
+  min-width: 118px !important;
+  min-height: 64px !important;
+  padding: 10px 14px !important;
+  border: 1px solid #30333f !important;
+  border-radius: 10px !important;
+  background: var(--ziad-ui-surface-low) !important;
+  box-shadow: none !important;
+}
+
+.summary-pill strong {
+  color: #eef0f8 !important;
+  font-size: 18px !important;
+  font-weight: 720 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-pill span {
+  color: #858b9d !important;
+  font-size: 10px !important;
+}
+
+.attachment-count {
+  color: #aeb7cf !important;
+}
+
+/* --------------------------------------------------------------------------
+   ACTIVITY CHART
+   -------------------------------------------------------------------------- */
+.activity-track {
+  background: #282b35 !important;
+  border: 1px solid #343845 !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+}
+
+.activity-track span {
+  background: linear-gradient(180deg, #5f8fff, #2563eb) !important;
+  border-radius: 4px 4px 1px 1px !important;
+}
+
+.activity-value,
+.activity-column small,
+.activity-summary span {
+  color: #8e94a6 !important;
+}
+
+.activity-summary strong {
+  color: #eef0f8 !important;
+}
+
+/* --------------------------------------------------------------------------
+   DOCUMENT EDITOR CHROME ONLY
+   DO NOT STYLE .template-page OR .template-field
+   -------------------------------------------------------------------------- */
+.document-commandbar {
+  margin-bottom: 14px !important;
+  padding: 10px !important;
+  gap: 10px !important;
+  border: 1px solid #30333f !important;
+  border-radius: 10px !important;
+  background: var(--ziad-ui-surface-low) !important;
+  color: var(--ziad-ui-text) !important;
+}
+
+.commandbar-primary,
+.commandbar-secondary {
+  gap: 8px !important;
+}
+
+.field-guide-toggle {
+  min-height: 38px !important;
+  padding-inline: 11px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  border: 1px solid #3b3e4b !important;
+  border-radius: 8px !important;
+  background: #171922 !important;
+  color: #b8bdcd !important;
+  font-size: 11px !important;
+}
+
+.field-guide-toggle input {
+  accent-color: var(--ziad-ui-primary) !important;
+}
+
+.editor-grid {
+  gap: 16px !important;
+  align-items: start !important;
+}
+
+.editor-stage {
+  padding: 18px !important;
+  border: 1px solid #30333f !important;
+  border-radius: 12px !important;
+  background:
+    linear-gradient(45deg, rgba(255,255,255,0.018) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.018) 75%),
+    linear-gradient(45deg, rgba(255,255,255,0.018) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.018) 75%),
+    #0f1119 !important;
+  background-position: 0 0, 10px 10px !important;
+  background-size: 20px 20px !important;
+  box-shadow: none !important;
+}
+
+/* Explicitly no declarations are made for #template-page, .template-page,
+   .template-bg, .template-field, .template-line-field or .template-checkbox. */
+
+.editor-side {
+  gap: 14px !important;
+}
+
+.lock-note {
+  padding: 11px 12px !important;
+  border: 1px solid rgba(91, 140, 255, 0.22) !important;
+  border-radius: 8px !important;
+  background: var(--ziad-ui-primary-softer) !important;
+  color: #b9c8ee !important;
+  line-height: 1.55 !important;
+}
+
+.meta-list {
+  border: 1px solid #30333f !important;
+  border-radius: 9px !important;
+  overflow: hidden !important;
+}
+
+.meta-row {
+  min-height: 42px !important;
+  padding: 0 11px !important;
+  border-bottom: 1px solid #2c2f39 !important;
+  background: #181a22 !important;
+}
+
+.meta-row:last-child {
+  border-bottom: 0 !important;
+}
+
+.meta-row span {
+  color: #858b9d !important;
+}
+
+.meta-row strong {
+  color: #d9dce8 !important;
+}
+
+.attachment-uploader {
+  padding: 16px !important;
+  border: 1px dashed #4b536d !important;
+  border-radius: 10px !important;
+  background: #141722 !important;
+  transition: border-color 130ms ease, background-color 130ms ease !important;
+}
+
+.attachment-uploader:hover,
+.attachment-uploader.is-dragging {
+  border-color: #5f8fff !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+}
+
+.attachment-uploader-icon {
+  color: #8faeff !important;
+  background: var(--ziad-ui-primary-soft) !important;
+  border-color: rgba(91, 140, 255, 0.24) !important;
+}
+
+.attachment-uploader-copy strong,
+.attachment-name strong {
+  color: #e6e8f1 !important;
+}
+
+.attachment-uploader-copy span,
+.attachment-uploader-copy small,
+.attachment-name span,
+.attachment-list-head,
+.attachment-empty span {
+  color: #858b9d !important;
+}
+
+.attachment-item {
+  padding: 10px !important;
+  border: 1px solid #30333f !important;
+  border-radius: 9px !important;
+  background: #171922 !important;
+}
+
+/* --------------------------------------------------------------------------
+   SETTINGS / CHECK ITEMS
+   -------------------------------------------------------------------------- */
+.settings-layout {
+  gap: 14px !important;
+}
+
+.check-list {
+  gap: 8px !important;
+}
+
+.check-item {
+  min-height: 46px !important;
+  padding: 10px 12px !important;
+  border: 1px solid #353844 !important;
+  border-radius: 8px !important;
+  background: #171922 !important;
+  color: #d5d8e4 !important;
+}
+
+.check-item:hover {
+  border-color: #505465 !important;
+  background: #1c1f28 !important;
+}
+
+.check-item input {
+  accent-color: var(--ziad-ui-primary) !important;
+}
+
+/* --------------------------------------------------------------------------
+   MODALS
+   -------------------------------------------------------------------------- */
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.72) !important;
+  backdrop-filter: none !important;
+}
+
+.modal {
+  border: 1px solid #4a4e5d !important;
+  border-radius: 12px !important;
+  background: #191b23 !important;
+  color: var(--ziad-ui-text) !important;
+  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.34) !important;
+}
+
+.modal-head {
+  min-height: 62px !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid #343743 !important;
+  background: #1d1f27 !important;
+}
+
+.modal-head h3 {
+  color: #eff1f9 !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+
+.modal-body {
+  padding: 18px !important;
+  color: #c7cad7 !important;
+}
+
+.modal-foot {
+  padding: 12px 16px !important;
+  gap: 8px !important;
+  border-top: 1px solid #343743 !important;
+  background: #171920 !important;
+}
+
+/* --------------------------------------------------------------------------
+   TOASTS / EMPTY / LOADERS
+   -------------------------------------------------------------------------- */
+#toast-root {
+  color: var(--ziad-ui-text) !important;
+}
+
+.toast {
+  border: 1px solid #484c5b !important;
+  border-radius: 9px !important;
+  background: #1d1f27 !important;
+  color: #e5e7f0 !important;
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.28) !important;
+}
+
+.toast.success {
+  border-color: rgba(65, 211, 154, 0.34) !important;
+}
+
+.toast.error {
+  border-color: rgba(255, 180, 171, 0.38) !important;
+}
+
+.empty {
+  color: #9197a9 !important;
+}
+
+.empty strong,
+.empty h3 {
+  color: #e0e2ec !important;
+}
+
+.loader {
+  border-color: #3a3e4b !important;
+  border-top-color: #6f9aff !important;
+}
+
+/* --------------------------------------------------------------------------
+   LOGIN / FIRST SETUP - FULL SIZE, PREMIUM, FRIENDLY
+   -------------------------------------------------------------------------- */
+.auth-shell {
+  width: 100vw !important;
+  max-width: none !important;
+  min-width: 100vw !important;
+  min-height: 100vh !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  background: var(--ziad-ui-bg) !important;
+  color: var(--ziad-ui-text) !important;
+  overflow: hidden !important;
+}
+
+.auth-panel {
+  box-sizing: border-box !important;
+  min-height: 100vh !important;
+  padding: clamp(42px, 5vw, 82px) clamp(38px, 5vw, 86px) !important;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37,99,235,0.08), transparent 22rem),
+    #11131b !important;
+  color: var(--ziad-ui-text) !important;
+  border-inline-start: 1px solid #2b2e39 !important;
+}
+
+.auth-panel .brand {
+  margin-bottom: clamp(50px, 7vh, 84px) !important;
+}
+
+.auth-panel h2 {
+  margin: 0 0 9px !important;
+  color: #f1f3fb !important;
+  font-size: clamp(34px, 3vw, 46px) !important;
+  line-height: 1.15 !important;
+  font-weight: 740 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.auth-panel > p {
+  margin-bottom: 34px !important;
+  color: #9399ab !important;
+  font-size: 15px !important;
+  line-height: 1.7 !important;
+}
+
+.auth-panel .form-grid {
+  width: min(100%, 586px) !important;
+  max-width: 586px !important;
+  gap: 20px !important;
+}
+
+.auth-panel .form-row {
+  gap: 9px !important;
+}
+
+.auth-panel .form-row label {
+  color: #d9dce7 !important;
+  font-size: 13px !important;
+}
+
+.auth-panel .control {
+  min-height: 68px !important;
+  height: 68px !important;
+  padding-inline: 16px !important;
+  border-radius: 10px !important;
+  background: #0c0e16 !important;
+  border-color: #3b3f4c !important;
+  font-size: 16px !important;
+}
+
+.auth-panel .control:focus {
+  border-color: #5b8cff !important;
+  background: #0d1019 !important;
+}
+
+.auth-panel .btn-lg {
+  min-height: 68px !important;
+  height: 68px !important;
+  border-radius: 10px !important;
+  font-size: 16px !important;
+}
+
+.auth-visual {
+  position: relative !important;
+  min-height: 100vh !important;
+  overflow: hidden !important;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(37,99,235,0.32), transparent 24rem),
+    radial-gradient(circle at 76% 72%, rgba(180,197,255,0.08), transparent 30rem),
+    linear-gradient(145deg, #0b1020 0%, #11192c 50%, #0b1020 100%) !important;
+  color: #eef2ff !important;
+}
+
+.auth-visual::before,
+.auth-visual::after {
+  content: "" !important;
+  position: absolute !important;
+  border: 1px solid rgba(180,197,255,0.10) !important;
+  border-radius: 50% !important;
+  pointer-events: none !important;
+}
+
+.auth-visual::before {
+  width: 540px !important;
+  height: 540px !important;
+  inset-inline-end: -180px !important;
+  inset-block-start: -170px !important;
+}
+
+.auth-visual::after {
+  width: 760px !important;
+  height: 760px !important;
+  inset-inline-start: -310px !important;
+  inset-block-end: -430px !important;
+}
+
+.auth-copy {
+  position: relative !important;
+  z-index: 1 !important;
+  width: min(760px, 78%) !important;
+}
+
+.auth-copy h1 {
+  margin: 0 0 24px !important;
+  color: #f5f7ff !important;
+  font-size: clamp(48px, 5vw, 74px) !important;
+  line-height: 1.13 !important;
+  font-weight: 760 !important;
+  letter-spacing: -0.035em !important;
+}
+
+.auth-copy p {
+  max-width: 720px !important;
+  color: #b6bed4 !important;
+  font-size: clamp(17px, 1.45vw, 22px) !important;
+  line-height: 1.9 !important;
+}
+
+/* Keep earlier 100%-size compatibility classes at the same real dimensions. */
+html.ziad-login-size-lock .ziad-login-form-lock {
+  width: min(586px, calc(100% - 72px)) !important;
+  max-width: 586px !important;
+  zoom: 1 !important;
+  transform: none !important;
+}
+
+html.ziad-login-size-lock .ziad-login-form-lock input[type="text"],
+html.ziad-login-size-lock .ziad-login-form-lock input[type="email"],
+html.ziad-login-size-lock .ziad-login-form-lock input[type="password"],
+html.ziad-login-size-lock .ziad-login-form-lock button,
+html.ziad-login-size-lock .ziad-login-form-lock input[type="submit"] {
+  min-height: 68px !important;
+  height: 68px !important;
+}
+
+/* --------------------------------------------------------------------------
+   SCROLLBARS - APPLICATION CHROME
+   -------------------------------------------------------------------------- */
+.sidebar::-webkit-scrollbar,
+.table-wrap::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar,
+.editor-side::-webkit-scrollbar {
+  width: 9px !important;
+  height: 9px !important;
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.table-wrap::-webkit-scrollbar-thumb,
+.modal-body::-webkit-scrollbar-thumb,
+.editor-side::-webkit-scrollbar-thumb {
+  background: #3d414e !important;
+  border: 2px solid transparent !important;
+  background-clip: padding-box !important;
+  border-radius: 999px !important;
+}
+
+/* --------------------------------------------------------------------------
+   RESPONSIVE - NO SCALE / NO ZOOM. Layout reflows instead.
+   -------------------------------------------------------------------------- */
+@media (max-width: 1200px) {
+  .content {
+    padding: 24px 22px 40px !important;
+  }
+
+  .cards.dashboard-cards {
+    gap: 12px !important;
+  }
+
+  .auth-panel {
+    padding-inline: 42px !important;
+  }
+
+  .auth-copy h1 {
+    font-size: clamp(42px, 5vw, 62px) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .content {
+    padding: 20px 16px 34px !important;
+  }
+
+  .sidebar {
+    border-inline-end: 1px solid #343743 !important;
+  }
+
+  .sidebar-backdrop {
+    background: rgba(0,0,0,0.66) !important;
+  }
+
+  .page-header {
+    align-items: stretch !important;
+  }
+
+  .page-actions {
+    width: 100% !important;
+  }
+
+  .auth-shell {
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow-y: auto !important;
+  }
+
+  .auth-visual {
+    display: none !important;
+  }
+
+  .auth-panel {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 100vh !important;
+    padding: 42px 28px !important;
+    border-inline-start: 0 !important;
+  }
+
+  .auth-panel .form-grid {
+    width: 100% !important;
+    max-width: 586px !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .topbar {
+    padding-inline: 12px !important;
+  }
+
+  .topbar-user > span {
+    display: none !important;
+  }
+
+  .content {
+    padding-inline: 12px !important;
+  }
+
+  .page-header h1 {
+    font-size: 24px !important;
+  }
+
+  .stat-card {
+    min-height: 126px !important;
+    padding: 16px !important;
+  }
+
+  .summary-pill {
+    min-width: 0 !important;
+    flex: 1 1 120px !important;
+  }
+
+  .document-commandbar {
+    align-items: stretch !important;
+  }
+
+  .commandbar-primary,
+  .commandbar-secondary {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+  }
+
+  .auth-panel {
+    padding: 32px 18px !important;
+  }
+
+  .auth-panel .control,
+  .auth-panel .btn-lg {
+    min-height: 60px !important;
+    height: 60px !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   FINAL TEMPLATE PROTECTION NOTE
+   There are intentionally NO selectors for official voucher/request template
+   markup. The premium theme changes system chrome only.
+   -------------------------------------------------------------------------- */
+
+/* ========================================================================== 
+   v3.3.26 - COMPLETE SYSTEM CONTROL COVERAGE
+   Fixes legacy/light controls that are generated without the .control class
+   (for example: the "المبلغ المحدد" repayment field).
+
+   TEMPLATE SAFETY:
+   Every broad selector explicitly excludes descendants of known template
+   containers/classes. This section changes application UI only.
+   ========================================================================== */
+
+/* Never shrink the application. Responsive behavior must reflow, not scale. */
+html,
+body,
+#app,
+.app-shell,
+.main,
+.content,
+.auth-shell {
+  zoom: 1 !important;
+  scale: 1 !important;
+}
+
+html,
+body,
+#app,
+.app-shell {
+  max-width: none !important;
+}
+
+/* Shared exclusion set for official document/template fields is repeated in
+   selectors because CSS has no variable for selector lists. */
+
+/* Raw text/number/date/select controls used by newer system screens/modals. */
+#app .content :where(
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  select,
+  textarea
+):not(.template-page *):not(.template-field):not(.template-line-field):not(.template-checkbox),
+#app .modal :where(
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  select,
+  textarea
+):not(.template-page *):not(.template-field):not(.template-line-field):not(.template-checkbox) {
+  min-height: 46px !important;
+  box-sizing: border-box !important;
+  padding: 10px 13px !important;
+  border: 1px solid #434655 !important;
+  border-radius: 8px !important;
+  outline: 0 !important;
+  background: #0c0e16 !important;
+  color: #e1e2ed !important;
+  caret-color: #b4c5ff !important;
+  box-shadow: none !important;
+  font-family: var(--ziad-ui-font) !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  transition: border-color 120ms ease, background-color 120ms ease !important;
+}
+
+#app .content :where(
+  input[type="text"], input[type="number"], input[type="date"],
+  input[type="datetime-local"], input[type="time"], input[type="email"],
+  input[type="password"], input[type="search"], input[type="tel"],
+  input[type="url"], select, textarea
+):not(.template-page *):not(.template-field):not(.template-line-field):hover:not(:disabled),
+#app .modal :where(
+  input[type="text"], input[type="number"], input[type="date"],
+  input[type="datetime-local"], input[type="time"], input[type="email"],
+  input[type="password"], input[type="search"], input[type="tel"],
+  input[type="url"], select, textarea
+):not(.template-page *):not(.template-field):not(.template-line-field):hover:not(:disabled) {
+  border-color: #666a7c !important;
+  background: #11131b !important;
+}
+
+#app .content :where(
+  input[type="text"], input[type="number"], input[type="date"],
+  input[type="datetime-local"], input[type="time"], input[type="email"],
+  input[type="password"], input[type="search"], input[type="tel"],
+  input[type="url"], select, textarea
+):not(.template-page *):not(.template-field):not(.template-line-field):focus,
+#app .modal :where(
+  input[type="text"], input[type="number"], input[type="date"],
+  input[type="datetime-local"], input[type="time"], input[type="email"],
+  input[type="password"], input[type="search"], input[type="tel"],
+  input[type="url"], select, textarea
+):not(.template-page *):not(.template-field):not(.template-line-field):focus {
+  border-color: #2563eb !important;
+  background: #0c0e16 !important;
+  box-shadow: none !important;
+}
+
+#app .content :where(input, textarea):not(.template-page *)::placeholder,
+#app .modal :where(input, textarea):not(.template-page *)::placeholder {
+  color: #7e8498 !important;
+  opacity: 1 !important;
+}
+
+#app .content select:not(.template-page *):not(.template-field),
+#app .modal select:not(.template-page *):not(.template-field) {
+  color-scheme: dark !important;
+}
+
+#app .content select:not(.template-page *) option,
+#app .modal select:not(.template-page *) option {
+  background: #191b23 !important;
+  color: #e1e2ed !important;
+}
+
+/* System field labels and helper copy. This directly fixes the repayment
+   amount label/helper area shown in the user's screenshot. */
+#app .content :where(label, .field-label, .input-label, .form-label):not(.template-page *),
+#app .modal :where(label, .field-label, .input-label, .form-label):not(.template-page *) {
+  color: #d8dbe7 !important;
+  font-family: var(--ziad-ui-font) !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  line-height: 1.45 !important;
+}
+
+#app .content :where(.help, .hint, .helper, .helper-text, .field-help, .form-help, small):not(.template-page *),
+#app .modal :where(.help, .hint, .helper, .helper-text, .field-help, .form-help, small):not(.template-page *) {
+  display: block;
+  margin-top: 7px !important;
+  color: #9297aa !important;
+  font-family: var(--ziad-ui-font) !important;
+  font-size: 12px !important;
+  line-height: 1.65 !important;
+}
+
+/* Friendly field grouping: fixes cramped label/input/help arrangements while
+   respecting the original UI's real size. */
+#app .content :where(.field, .form-field, .input-group, .field-group):not(.template-page *),
+#app .modal :where(.field, .form-field, .input-group, .field-group):not(.template-page *) {
+  gap: 7px !important;
+}
+
+/* Numeric values: keep digits easy to scan in financial screens. */
+#app .content input[type="number"]:not(.template-page *),
+#app .modal input[type="number"]:not(.template-page *) {
+  font-variant-numeric: tabular-nums !important;
+}
+
+/* Checkboxes/radios are system controls too, but template checkboxes remain
+   explicitly protected. */
+#app .content :where(input[type="checkbox"], input[type="radio"]):not(.template-page *):not(.template-checkbox),
+#app .modal :where(input[type="checkbox"], input[type="radio"]):not(.template-page *):not(.template-checkbox) {
+  accent-color: #2563eb !important;
+}
+
+/* Legacy cards/panels occasionally carry inline white backgrounds. Override
+   only well-known application containers, never template containers. */
+#app .content :where(.card, .panel, .modal-card, .form-card, .settings-card, .section-card):not(.template-page *),
+#app .modal :where(.card, .panel, .modal-card, .form-card, .settings-card, .section-card):not(.template-page *) {
+  background: #1d1f27 !important;
+  color: #e1e2ed !important;
+  border-color: #343743 !important;
+  box-shadow: none !important;
+}
+
+/* Legacy table coverage - compact premium data grid. */
+#app .content table:not(.template-page *) {
+  color: #e1e2ed !important;
+  border-color: #343743 !important;
+}
+
+#app .content table:not(.template-page *) thead th {
+  background: #191b23 !important;
+  color: #c3c6d7 !important;
+  border-color: #343743 !important;
+}
+
+#app .content table:not(.template-page *) tbody td {
+  border-color: #2f323d !important;
+}
+
+#app .content table:not(.template-page *) tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.018) !important;
+}
+
+#app .content table:not(.template-page *) tbody tr:hover td {
+  background: rgba(37, 99, 235, 0.07) !important;
+}
+
+/* Keep dialogs friendly and readable at full physical size. */
+.modal {
+  max-height: min(88vh, 920px) !important;
+}
+
+.modal-body {
+  line-height: 1.6 !important;
+}
+
+/* RTL/LTR logical behavior. Directional positioning remains logical. */
+[dir="rtl"] #app .content :where(input, select, textarea):not(.template-page *),
+[dir="rtl"] #app .modal :where(input, select, textarea):not(.template-page *) {
+  text-align: start;
+}
+
+/* Small screens reflow; they are never scaled down. */
+@media (max-width: 760px) {
+  html,
+  body,
+  #app,
+  .app-shell,
+  .main,
+  .content,
+  .auth-shell {
+    zoom: 1 !important;
+    scale: 1 !important;
+  }
+
+  #app .content :where(
+    input[type="text"], input[type="number"], input[type="date"],
+    input[type="datetime-local"], input[type="time"], input[type="email"],
+    input[type="password"], input[type="search"], input[type="tel"],
+    input[type="url"], select, textarea
+  ):not(.template-page *):not(.template-field):not(.template-line-field) {
+    min-height: 46px !important;
+    font-size: 14px !important;
+  }
+}
+
+/* END v3.3.26 UI-only coverage. Official voucher/request templates untouched. */
