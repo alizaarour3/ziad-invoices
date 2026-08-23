@@ -1,0 +1,15 @@
+1. Open a new Payment Request.
+2. Enter unique values in: department, pay to, description of purpose, amount, currency, written amount, prepared by, approval.
+3. Convert/open Payment Voucher.
+4. Verify exactly:
+   department -> Pay to
+   Pay to -> Purpose line 1
+   Description of purpose -> Purpose following line(s)
+   amount -> amount
+   currency -> currency
+   written amount -> written amount
+   approval -> approval
+   prepared by -> receiver name
+5. Save and generate PDF.
+6. Verify text is immediately above ruled lines, not below them.
+7. Verify original voucher artwork is unchanged.
