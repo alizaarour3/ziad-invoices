@@ -1,0 +1,18 @@
+{
+  "version": "3.3.33",
+  "status": "LOCKED_USER_APPROVED",
+  "source": "Payment Request HTML",
+  "target": "Payment Voucher HTML",
+  "mapping": [
+    {"from": "department", "from_label": "Department / القسم", "to": "pay_to", "to_label": "Pay to / الدفع لـ"},
+    {"from": "pay_to", "from_label": "Pay to / الدفع لـ", "to": "purpose", "to_label": "Purpose / الغرض", "position": "first_line"},
+    {"from": "purpose_1 + purpose_2", "from_label": "Description of Purpose / الغرض", "to": "purpose", "to_label": "Purpose / الغرض", "position": "following_lines"},
+    {"from": "amount", "to": "amount"},
+    {"from": "currency", "to": "currency"},
+    {"from": "written_amount_1 + written_amount_2", "to": "written_amount"},
+    {"from": "approval_signature", "to": "approval"},
+    {"from": "prepared_signature", "from_label": "Prepared by / اسم مقدم الصرف", "to": "receiver_name", "to_label": "Name of Receiver / اسم المستلم"}
+  ],
+  "do_not_use_for_receiver": ["requester", "Name of Requester"],
+  "print_contract": "All Payment Voucher typed text must print above printed lines. Voucher artwork is unchanged."
+}

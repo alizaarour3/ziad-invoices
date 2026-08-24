@@ -1,0 +1,21 @@
+{
+  "version": "3.3.33",
+  "user_uploads": {
+    "payment-request-premium-v16(3).html": "f450bca434ad25b75c9d8fa19d91495197635874c612e5dcb6df617063d392d1",
+    "payment_voucher_no_footer(2).html": "c20f5a321201b15ce3d45a94fac53514ef2251da8b5000d13af77d92894ed309",
+    "request_transfer_editable(3).html": "02560523c3cf78c0e4bd948e6b2961e38e10ae727deacd5c076c3783cb21ad48",
+    "كشف_صيانة_السيارات(3).html": "8c32ce2e6716b94ef668aa28d4ec8283b217345db80d9e87bfaf6b4be923f86a"
+  },
+  "installed_patch_files": {
+    "payment-request.html": "ade4e27371b3faf6854564de5549d7fc957e9f345a7d7de661ae14ffdef3a4de",
+    "payment-voucher.html": "cac5bcd212084b6e2ff7e38c1d6eb4e8965f18bfb478c56fdd9c8d5365444f50",
+    "request-transfer.html": "02560523c3cf78c0e4bd948e6b2961e38e10ae727deacd5c076c3783cb21ad48",
+    "car-maintenance.html": "8c32ce2e6716b94ef668aa28d4ec8283b217345db80d9e87bfaf6b4be923f86a"
+  },
+  "artwork_hashes": {
+    "payment-request-source": "c0c0dd2105ec5885d45a4f761cdf843f2b6984bdd2a9a3fc3001c97cbb76a769",
+    "payment-request-patched": "c0c0dd2105ec5885d45a4f761cdf843f2b6984bdd2a9a3fc3001c97cbb76a769",
+    "payment-voucher-source": "991bd02183591e0c0663166ea536c2198c3491a556cc45d036dffb5956fdb841",
+    "payment-voucher-patched": "991bd02183591e0c0663166ea536c2198c3491a556cc45d036dffb5956fdb841"
+  }
+}

@@ -1,8 +1,8 @@
-/* Ziad Invoices v3.3.32 - HTML templates + locked Payment Request -> Payment Voucher transfer */
+/* Ziad Invoices v3.3.33 - HTML templates + locked Payment Request -> Payment Voucher transfer */
 (() => {
   'use strict';
 
-  const VERSION = '3.3.32';
+  const VERSION = '3.3.33';
   const HOST_CLASS = 'ziad-html-template-host';
   const FRAME_CLASS = 'ziad-html-template-frame';
 
@@ -163,7 +163,7 @@
 
   // FINAL user-approved PR -> PV contract for the real HTML templates.
   // This intentionally reads/writes the HTML fields themselves, not a screenshot/background.
-  const PR_TO_PV_STORAGE = 'ziad-pr-pv-html-final-v3.3.32';
+  const PR_TO_PV_STORAGE = 'ziad-pr-pv-html-final-v3.3.33';
   const PR_TO_PV_MAX_AGE = 10 * 60 * 1000;
 
   function readSavedElement(doc, selector) {
@@ -192,7 +192,7 @@
       currency: readSavedElement(doc, '[data-save="currency"]'),
       written_amount: readSavedLines(doc, ['[data-save="written_amount"]','[data-save="written_amount_1"]','[data-save="written_amount_2"]']),
       approval: readSavedElement(doc, '[data-save="approval_signature"]'),
-      // "Name of Requester" is the actual requester/person name in the supplied PR HTML.
+      // Name of Requester stays separate. User-approved receiver source is Prepared by only.
       requester_name: readSavedElement(doc, '[data-save="requester"]'),
       prepared_by: readSavedElement(doc, '[data-save="prepared_signature"]')
     };
@@ -260,11 +260,11 @@
     changed = setVoucherHtmlField(doc, '#currency', src.currency) || changed;
     changed = setVoucherHtmlField(doc, '#written', src.written_amount) || changed;
     changed = setVoucherHtmlField(doc, '#approval', src.approval) || changed;
-    changed = setVoucherHtmlField(doc, '#receiver', src.requester_name || src.prepared_by) || changed;
+    changed = setVoucherHtmlField(doc, '#receiver', src.prepared_by) || changed;
 
     if (changed) {
-      frame.dataset.ziadPrPvMapping = 'final-v3.3.32-applied';
-      doc.documentElement.dataset.ziadPrPvMapping = 'final-v3.3.32-applied';
+      frame.dataset.ziadPrPvMapping = 'final-v3.3.33-applied';
+      doc.documentElement.dataset.ziadPrPvMapping = 'final-v3.3.33-applied';
     }
     return changed;
   }
@@ -284,7 +284,7 @@
 
   function scheduleVoucherApply(frame) {
     // Run after the ordinary HTML-template binding so the final user-approved mapping wins.
-    [0, 60, 180, 450, 900].forEach(delay => setTimeout(() => applyPaymentRequestToVoucherHtml(frame), delay));
+    [0, 60, 180, 450, 900, 1500, 3000].forEach(delay => setTimeout(() => applyPaymentRequestToVoucherHtml(frame), delay));
   }
 
   function captureOpenPaymentRequest() {
@@ -339,7 +339,7 @@
       if (headerNo && !readMirror(page,'document_number')) setChildValue(doc.querySelector('#rv'), headerNo);
     }
 
-    // v3.3.32: bind the transfer contract to the real HTML template fields.
+    // v3.3.33: bind the transfer contract to the real HTML template fields.
     if (type === 'PR') bindPaymentRequestCapture(frame);
     if (type === 'PV') scheduleVoucherApply(frame);
   }

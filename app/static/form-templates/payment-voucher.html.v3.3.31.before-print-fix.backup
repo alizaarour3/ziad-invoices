@@ -82,49 +82,52 @@
     html, body { width:210mm; height:297mm; background:white; padding:0; }
     body { display:block; }
     .page { width:210mm; height:297mm; margin:0; box-shadow:none; }
-  }
 
-/* v3.3.33 PRINT CONTRACT: keep the original voucher artwork untouched and lift typed text above lines. */
-@media print {
-  .field {
-    -webkit-appearance:none !important;
-    appearance:none !important;
-    background:transparent !important;
-    border:0 !important;
-    box-shadow:none !important;
-    margin:0 !important;
-    vertical-align:top !important;
-    transform:translateY(-1.15mm) !important;
-  }
+    /* PRINT-ONLY ALIGNMENT FIX
+       Keep every typed value clearly ABOVE its printed line.
+       The document artwork/lines are not moved. */
+    .field {
+      -webkit-appearance:none !important;
+      appearance:none !important;
+      background:transparent !important;
+      border:0 !important;
+      box-shadow:none !important;
+      margin:0 !important;
+      vertical-align:top !important;
+      transform:translateY(-1.15mm) !important;
+    }
 
-  /* Boxed metadata/amount fields: small lift prevents PDF baseline drop. */
-  #rv, #date, #ref, #request, #amount, #currency {
-    transform:translateY(-0.95mm) !important;
-  }
+    /* Header/boxed values: small upward correction for print baseline. */
+    #rv, #date, #ref, #request, #amount, #currency {
+      transform:translateY(-0.95mm) !important;
+    }
 
-  /* Ruled fields: text must sit clearly ABOVE the printed rule. */
-  #payto {
-    transform:translateY(-1.75mm) !important;
-    padding-bottom:1.5mm !important;
+    /* Values that sit directly on ruled lines need a stronger lift. */
+    #payto {
+      transform:translateY(-1.75mm) !important;
+      padding-bottom:1.5mm !important;
+    }
+
+    #purpose {
+      transform:translateY(-2.00mm) !important;
+      line-height:7.23771mm !important;
+      padding-top:0 !important;
+      padding-bottom:1.5mm !important;
+    }
+
+    #written {
+      transform:translateY(-2.10mm) !important;
+      line-height:7.49166mm !important;
+      padding-top:0 !important;
+      padding-bottom:1.5mm !important;
+    }
+
+    #receiver, #accountant, #approval {
+      transform:translateY(-1.80mm) !important;
+      padding-top:0 !important;
+      padding-bottom:1.5mm !important;
+    }
   }
-  #purpose {
-    transform:translateY(-2.00mm) !important;
-    line-height:7.23771mm !important;
-    padding-top:0 !important;
-    padding-bottom:1.5mm !important;
-  }
-  #written {
-    transform:translateY(-2.10mm) !important;
-    line-height:7.49166mm !important;
-    padding-top:0 !important;
-    padding-bottom:1.5mm !important;
-  }
-  #receiver, #accountant, #approval {
-    transform:translateY(-1.80mm) !important;
-    padding-top:0 !important;
-    padding-bottom:1.5mm !important;
-  }
-}
 </style>
 </head>
 <body>

@@ -1,0 +1,18 @@
+Ziad Invoices v3.3.33 verification
+
+PASS - Python installer syntax
+PASS - JavaScript runtime syntax (node --check)
+PASS - Installer tested against a synthetic Ziad project
+PASS - Rollback tested
+PASS - Department -> PV Pay to rule present
+PASS - PR Pay to -> PV Purpose first line rule present
+PASS - Description of Purpose -> PV Purpose following lines rule present
+PASS - Prepared by -> Name of Receiver rule present
+PASS - Name of Requester is NOT used for Name of Receiver
+PASS - Extended delayed apply schedule present (0..3000 ms)
+PASS - Payment Voucher print-only above-line CSS present for all typed fields
+PASS - Payment Request source artwork data hash unchanged
+PASS - Payment Voucher source artwork data hash unchanged
+PASS - PDF render comparison changed only text positioning; background artwork hash is unchanged
+
+Note: WeasyPrint renders the embedded voucher SVG with renderer-specific black fills; this is an SVG renderer parity artifact and is not introduced by this patch. The actual print CSS differences were isolated to the text overlay.
