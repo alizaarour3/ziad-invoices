@@ -45,4 +45,4 @@ RUN mkdir -p /tmp/ziad-data/attachments /tmp/ziad-data/generated /tmp/ziad-data/
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000} --proxy-headers --forwarded-allow-ips='*'"]
+CMD ["sh", "-c", "uvicorn app.runtime_entry:app --host 0.0.0.0 --port ${PORT:-10000} --proxy-headers --forwarded-allow-ips='*'"]
