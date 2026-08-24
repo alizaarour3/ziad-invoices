@@ -5,9 +5,10 @@ from typing import Any
 
 from . import main as core
 from .services import pdf_service
+from . import print_engine_v3335
 
 
-BUILD_VERSION = "3.3.34"
+BUILD_VERSION = "3.3.35"
 
 
 def _text(value: Any) -> str:
@@ -42,16 +43,11 @@ def _payment_voucher_fields_from_request(source_number: str, source_fields: dict
     }
 
 
-# The conversion endpoint resolves this global at request time, so replacing the
-# helper here fixes the real backend path used by desktop and Render.
 core._payment_voucher_fields_from_request = _payment_voucher_fields_from_request
-
-
 _original_existing_payment_voucher = core._existing_payment_voucher_for_request
 
 
 def _existing_payment_voucher_for_request(conn: core.DBConnection, payment_request_number: str) -> core.Record | None:
-    """Refresh an already-converted PV so old incorrect mappings are repaired too."""
     existing = _original_existing_payment_voucher(conn, payment_request_number)
     if not existing:
         return None
@@ -71,9 +67,6 @@ def _existing_payment_voucher_for_request(conn: core.DBConnection, payment_reque
 
     mapped = _payment_voucher_fields_from_request(payment_request_number, source_fields)
     clean = core._safe_fields(existing, mapped, str(existing["document_number"]))
-
-    # Do not create a revision if the linked voucher already contains the exact
-    # approved mapping.
     comparable_keys = set(clean.keys())
     if all(current_fields.get(key) == clean.get(key) for key in comparable_keys):
         return existing
@@ -98,10 +91,7 @@ def _existing_payment_voucher_for_request(conn: core.DBConnection, payment_reque
             action="document.refresh_payment_request_mapping",
             entity_type="document",
             entity_id=existing["id"],
-            details={
-                "source_document_number": payment_request_number,
-                "mapping_version": BUILD_VERSION,
-            },
+            details={"source_document_number": payment_request_number, "mapping_version": BUILD_VERSION},
         )
 
     return conn.execute(core.DOCUMENT_SELECT + " WHERE d.id=?", (existing["id"],)).fetchone()
@@ -109,11 +99,6 @@ def _existing_payment_voucher_for_request(conn: core.DBConnection, payment_reque
 
 core._existing_payment_voucher_for_request = _existing_payment_voucher_for_request
 
-
-# pdf_service renders HTML using screen media and injects its own 16pt print
-# helper. Add a high-specificity style to the in-memory Payment Voucher only so
-# every entered value sits clearly above its printed line without changing the
-# official HTML/template artwork stored on disk.
 _OriginalBeautifulSoup = pdf_service.BeautifulSoup
 
 
@@ -141,9 +126,6 @@ def _print_adjusted_soup(markup: str, *args: Any, **kwargs: Any):
         transform: translateY(-1.45mm) !important;
         padding-bottom: 1.05mm !important;
       }
-      #voucherPage .ziad-print-split-lines {
-        transform: translateY(-1.90mm) !important;
-      }
       #voucherPage [data-ziad-print-line=\"1\"] {
         padding-bottom: 1.05mm !important;
       }
@@ -156,23 +138,22 @@ def _print_adjusted_soup(markup: str, *args: Any, **kwargs: Any):
 
 
 pdf_service.BeautifulSoup = _print_adjusted_soup
+print_engine_v3335.install()
 
 
-# Static assets and HTML form templates changed several times while the URLs
-# still carried v=3.3.20. Do not allow Render/browser caches to keep old UI or
-# old templates after a deploy.
 @core.app.middleware("http")
 async def runtime_cache_headers(request: core.Request, call_next):
     response = await call_next(request)
     path = request.url.path
     if (
-        path in {"/", "/index.html", "/app.js", "/styles.css", "/runtime-v3.3.34.js"}
+        path in {"/", "/index.html", "/app.js", "/styles.css"}
         or path.startswith("/form-templates/")
     ):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     response.headers["X-Ziad-Build"] = BUILD_VERSION
+    response.headers["X-Ziad-Print-Engine"] = print_engine_v3335.PRINT_ENGINE_VERSION
     return response
 
 
