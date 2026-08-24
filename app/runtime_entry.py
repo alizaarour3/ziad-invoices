@@ -5,10 +5,10 @@ from typing import Any
 
 from . import main as core
 from .services import pdf_service
-from . import print_engine_v3335
+from . import print_engine_v3336
 
 
-BUILD_VERSION = "3.3.35"
+BUILD_VERSION = "3.3.36"
 
 
 def _text(value: Any) -> str:
@@ -138,7 +138,7 @@ def _print_adjusted_soup(markup: str, *args: Any, **kwargs: Any):
 
 
 pdf_service.BeautifulSoup = _print_adjusted_soup
-print_engine_v3335.install()
+print_engine_v3336.install()
 
 
 @core.app.middleware("http")
@@ -153,7 +153,7 @@ async def runtime_cache_headers(request: core.Request, call_next):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     response.headers["X-Ziad-Build"] = BUILD_VERSION
-    response.headers["X-Ziad-Print-Engine"] = print_engine_v3335.PRINT_ENGINE_VERSION
+    response.headers["X-Ziad-Print-Engine"] = print_engine_v3336.PRINT_ENGINE_VERSION
     return response
 
 
