@@ -1,0 +1,17 @@
+{
+  "version": "3.3.32",
+  "status": "LOCKED_USER_APPROVED",
+  "source": "Payment Request HTML",
+  "destination": "Payment Voucher HTML",
+  "mapping": {
+    "department": "pay_to",
+    "pay_to": "purpose:first_line",
+    "description_of_purpose": "purpose:following_lines",
+    "amount": "amount",
+    "currency": "currency",
+    "written_amount": "written_amount",
+    "approval": "approval",
+    "name_of_requester": "receiver_name"
+  },
+  "template_policy": "Do not change voucher/request artwork. Mapping only."
+}

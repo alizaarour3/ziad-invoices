@@ -1,8 +1,8 @@
-/* Ziad Invoices v3.3.30 - user supplied HTML templates as the real editor surface */
+/* Ziad Invoices v3.3.32 - HTML templates + locked Payment Request -> Payment Voucher transfer */
 (() => {
   'use strict';
 
-  const VERSION = '3.3.30';
+  const VERSION = '3.3.32';
   const HOST_CLASS = 'ziad-html-template-host';
   const FRAME_CLASS = 'ziad-html-template-frame';
 
@@ -161,6 +161,137 @@
     return Object.keys(def.map).filter(key => present.has(key));
   }
 
+  // FINAL user-approved PR -> PV contract for the real HTML templates.
+  // This intentionally reads/writes the HTML fields themselves, not a screenshot/background.
+  const PR_TO_PV_STORAGE = 'ziad-pr-pv-html-final-v3.3.32';
+  const PR_TO_PV_MAX_AGE = 10 * 60 * 1000;
+
+  function readSavedElement(doc, selector) {
+    const el = doc?.querySelector(selector);
+    return childValue(el).trim();
+  }
+
+  function readSavedLines(doc, selectors) {
+    return selectors
+      .map(selector => readSavedElement(doc, selector))
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+  }
+
+  function collectPaymentRequestHtml(doc) {
+    if (!doc) return null;
+    const values = {
+      // LOCKED RULE: Department/القسم -> PV Pay to/الدفع لـ
+      department: readSavedElement(doc, '[data-save="department"]'),
+      // LOCKED RULE: PR Pay to/الدفع لـ -> PV Purpose/الغرض (first line)
+      pay_to: readSavedElement(doc, '[data-save="pay_to"]'),
+      // Description of purpose continues inside PV Purpose after PR Pay to.
+      purpose: readSavedLines(doc, ['[data-save="purpose"]','[data-save="purpose_1"]','[data-save="purpose_2"]']),
+      amount: readSavedElement(doc, '[data-save="amount"]'),
+      currency: readSavedElement(doc, '[data-save="currency"]'),
+      written_amount: readSavedLines(doc, ['[data-save="written_amount"]','[data-save="written_amount_1"]','[data-save="written_amount_2"]']),
+      approval: readSavedElement(doc, '[data-save="approval_signature"]'),
+      // "Name of Requester" is the actual requester/person name in the supplied PR HTML.
+      requester_name: readSavedElement(doc, '[data-save="requester"]'),
+      prepared_by: readSavedElement(doc, '[data-save="prepared_signature"]')
+    };
+    if (!Object.values(values).some(Boolean)) return null;
+    return { version: VERSION, captured_at: Date.now(), values };
+  }
+
+  function savePaymentRequestSnapshot(doc) {
+    const payload = collectPaymentRequestHtml(doc);
+    if (!payload) return null;
+    const raw = JSON.stringify(payload);
+    try { sessionStorage.setItem(PR_TO_PV_STORAGE, raw); } catch (_) {}
+    try { localStorage.setItem(PR_TO_PV_STORAGE, raw); } catch (_) {}
+    return payload;
+  }
+
+  function loadPaymentRequestSnapshot() {
+    let raw = null;
+    try { raw = sessionStorage.getItem(PR_TO_PV_STORAGE); } catch (_) {}
+    if (!raw) { try { raw = localStorage.getItem(PR_TO_PV_STORAGE); } catch (_) {} }
+    if (!raw) return null;
+    try {
+      const payload = JSON.parse(raw);
+      if (!payload?.values || !payload.captured_at) return null;
+      if (Date.now() - Number(payload.captured_at) > PR_TO_PV_MAX_AGE) return null;
+      return payload;
+    } catch (_) { return null; }
+  }
+
+  function composeVoucherPurpose(values) {
+    const payTo = String(values?.pay_to || '').trim();
+    const description = String(values?.purpose || '').replace(/\r\n?/g,'\n').trim();
+    if (payTo && description && payTo !== description) return `${payTo}\n${description}`;
+    return payTo || description;
+  }
+
+  function setVoucherHtmlField(doc, selector, value) {
+    if (!doc || value === undefined || value === null || String(value).trim() === '') return false;
+    const el = doc.querySelector(selector);
+    if (!el) return false;
+    const before = childValue(el);
+    setChildValue(el, value);
+    try { el.dispatchEvent(new Event('change',{bubbles:true})); } catch (_) {}
+    return before !== String(value);
+  }
+
+  function applyPaymentRequestToVoucherHtml(frame) {
+    if (!frame || frame.dataset.ziadTemplateType !== 'PV') return false;
+    const doc = frame.contentDocument;
+    const payload = loadPaymentRequestSnapshot();
+    if (!doc || !payload?.values) return false;
+    const src = payload.values;
+    let changed = false;
+
+    // === FINAL LOCKED MAPPING ===
+    // PR Department / القسم       -> PV Pay to / الدفع لـ
+    changed = setVoucherHtmlField(doc, '#payto', src.department) || changed;
+
+    // PR Pay to / الدفع لـ        -> PV Purpose / الغرض (first line)
+    // PR Description of purpose   -> PV Purpose / الغرض (following line(s))
+    changed = setVoucherHtmlField(doc, '#purpose', composeVoucherPurpose(src)) || changed;
+
+    // Remaining previously approved mappings.
+    changed = setVoucherHtmlField(doc, '#amount', src.amount) || changed;
+    changed = setVoucherHtmlField(doc, '#currency', src.currency) || changed;
+    changed = setVoucherHtmlField(doc, '#written', src.written_amount) || changed;
+    changed = setVoucherHtmlField(doc, '#approval', src.approval) || changed;
+    changed = setVoucherHtmlField(doc, '#receiver', src.requester_name || src.prepared_by) || changed;
+
+    if (changed) {
+      frame.dataset.ziadPrPvMapping = 'final-v3.3.32-applied';
+      doc.documentElement.dataset.ziadPrPvMapping = 'final-v3.3.32-applied';
+    }
+    return changed;
+  }
+
+  function bindPaymentRequestCapture(frame) {
+    const doc = frame?.contentDocument;
+    if (!doc || doc.documentElement.dataset.ziadPrPvCapture === VERSION) return;
+    doc.documentElement.dataset.ziadPrPvCapture = VERSION;
+    const save = () => savePaymentRequestSnapshot(doc);
+    doc.addEventListener('input', save, true);
+    doc.addEventListener('change', save, true);
+    doc.addEventListener('blur', save, true);
+    // Capture after the normal HTML-runtime mirror binding has populated the template.
+    setTimeout(save, 0);
+    setTimeout(save, 120);
+  }
+
+  function scheduleVoucherApply(frame) {
+    // Run after the ordinary HTML-template binding so the final user-approved mapping wins.
+    [0, 60, 180, 450, 900].forEach(delay => setTimeout(() => applyPaymentRequestToVoucherHtml(frame), delay));
+  }
+
+  function captureOpenPaymentRequest() {
+    const frame = document.querySelector(`iframe.${FRAME_CLASS}[data-ziad-template-type="PR"]`);
+    if (frame?.contentDocument) savePaymentRequestSnapshot(frame.contentDocument);
+  }
+
   function lockChild(doc, locked) {
     if (!locked) return;
     doc.querySelectorAll('input,textarea,select,button').forEach(el => { if (!el.closest('.toolbar')) el.disabled = true; });
@@ -207,6 +338,10 @@
       const headerNo = document.querySelector('.document-header h1')?.textContent?.trim();
       if (headerNo && !readMirror(page,'document_number')) setChildValue(doc.querySelector('#rv'), headerNo);
     }
+
+    // v3.3.32: bind the transfer contract to the real HTML template fields.
+    if (type === 'PR') bindPaymentRequestCapture(frame);
+    if (type === 'PV') scheduleVoucherApply(frame);
   }
 
   function activate(page) {
@@ -239,6 +374,10 @@
 
   // Print the exact user-supplied HTML template. Capture phase prevents the legacy image/PDF route.
   document.addEventListener('click',event => {
+    // Always capture the latest Payment Request values before any conversion/navigation action.
+    // Capturing on all clicks is harmless and avoids depending on the exact button wording.
+    captureOpenPaymentRequest();
+
     const button = event.target.closest('#print-document');
     if (!button) return;
     const page = document.querySelector('#template-page.ziad-html-template-host');
