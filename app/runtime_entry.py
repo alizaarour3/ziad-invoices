@@ -5,10 +5,9 @@ from typing import Any
 
 from . import main as core
 from .services import pdf_service
-from . import print_engine_v3336
 
 
-BUILD_VERSION = "3.3.36"
+BUILD_VERSION = "3.3.37"
 core.APP_VERSION = BUILD_VERSION
 
 
@@ -17,13 +16,7 @@ def _text(value: Any) -> str:
 
 
 def _payment_voucher_fields_from_request(source_number: str, source_fields: dict[str, Any]) -> dict[str, Any]:
-    """User-approved Payment Request -> Payment Voucher mapping.
-
-    PR department -> PV pay_to
-    PR pay_to -> first line of PV purpose
-    PR purpose/description -> following PV purpose lines
-    PR prepared_by -> PV receiver_name
-    """
+    """User-approved Payment Request -> Payment Voucher mapping."""
     purpose_parts = [
         _text(source_fields.get("pay_to")),
         _text(source_fields.get("purpose")),
@@ -68,8 +61,7 @@ def _existing_payment_voucher_for_request(conn: core.DBConnection, payment_reque
 
     mapped = _payment_voucher_fields_from_request(payment_request_number, source_fields)
     clean = core._safe_fields(existing, mapped, str(existing["document_number"]))
-    comparable_keys = set(clean.keys())
-    if all(current_fields.get(key) == clean.get(key) for key in comparable_keys):
+    if all(current_fields.get(key) == clean.get(key) for key in set(clean.keys())):
         return existing
 
     fields_json = json.dumps(clean, ensure_ascii=False, separators=(",", ":"))
@@ -100,46 +92,20 @@ def _existing_payment_voucher_for_request(conn: core.DBConnection, payment_reque
 
 core._existing_payment_voucher_for_request = _existing_payment_voucher_for_request
 
-_OriginalBeautifulSoup = pdf_service.BeautifulSoup
+
+# HTML documents are printed by the user's browser from the exact iframe already
+# displayed on screen. If an old client still calls the server print endpoint,
+# fail cheaply instead of launching Chromium and risking Render exit 137/OOM.
+_original_render_document_pdf = pdf_service.render_document_pdf
 
 
-def _print_adjusted_soup(markup: str, *args: Any, **kwargs: Any):
-    soup = _OriginalBeautifulSoup(markup, *args, **kwargs)
-    title_text = soup.title.get_text(strip=True) if soup.title else ""
-    if "Payment Voucher" not in title_text:
-        return soup
-
-    style = soup.new_tag("style")
-    style["data-ziad-runtime-print-fix"] = BUILD_VERSION
-    style.string = """
-      #voucherPage .field[data-ziad-print-field=\"1\"]:not(input[type=\"checkbox\"]) {
-        transform: translateY(-0.90mm) !important;
-      }
-      #voucherPage #payto[data-ziad-print-field=\"1\"] {
-        transform: translateY(-1.70mm) !important;
-        padding-bottom: 1.15mm !important;
-      }
-      #voucherPage .purpose[data-ziad-print-field=\"1\"],
-      #voucherPage .written[data-ziad-print-field=\"1\"] {
-        transform: translateY(-1.90mm) !important;
-      }
-      #voucherPage .signature[data-ziad-print-field=\"1\"] {
-        transform: translateY(-1.45mm) !important;
-        padding-bottom: 1.05mm !important;
-      }
-      #voucherPage [data-ziad-print-line=\"1\"] {
-        padding-bottom: 1.05mm !important;
-      }
-    """
-    if soup.head:
-        soup.head.append(style)
-    else:
-        soup.insert(0, style)
-    return soup
+def _browser_only_html_guard(template: dict[str, Any], values: dict[str, Any], output_path):
+    if template.get("template_engine") == "html" and template.get("html_template"):
+        raise RuntimeError("HTML templates use browser-side printing in Ziad Invoices 3.3.37")
+    return _original_render_document_pdf(template, values, output_path)
 
 
-pdf_service.BeautifulSoup = _print_adjusted_soup
-print_engine_v3336.install()
+pdf_service.render_document_pdf = _browser_only_html_guard
 
 
 @core.app.middleware("http")
@@ -147,14 +113,14 @@ async def runtime_cache_headers(request: core.Request, call_next):
     response = await call_next(request)
     path = request.url.path
     if (
-        path in {"/", "/index.html", "/app.js", "/styles.css"}
+        path in {"/", "/index.html", "/app.js", "/styles.css", "/html-browser-print-v3.3.37.js"}
         or path.startswith("/form-templates/")
     ):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     response.headers["X-Ziad-Build"] = BUILD_VERSION
-    response.headers["X-Ziad-Print-Engine"] = print_engine_v3336.PRINT_ENGINE_VERSION
+    response.headers["X-Ziad-Print-Engine"] = "browser-html-3.3.37"
     return response
 
 
