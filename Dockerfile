@@ -5,14 +5,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     HOST=0.0.0.0 \
     PORT=10000 \
-    ZIAD_DATA_DIR=/tmp/ziad-data \
-    CHROMIUM_BIN=/usr/bin/chromium
+    ZIAD_DATA_DIR=/tmp/ziad-data
 
-# Runtime document tools, Chromium for exact HTML-to-PDF rendering, Arabic fonts,
-# and the native text-shaping stack used by Pillow/RAQM for correct Arabic joining.
+# Runtime document tools, Arabic fonts, and the native text-shaping stack used
+# by Pillow/RAQM. HTML document printing is handled by the user's browser and
+# local Windows printer, so Chromium is deliberately not installed on Render.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       chromium \
        libreoffice-writer \
        fontconfig \
        fonts-dejavu-core \
@@ -37,8 +36,7 @@ COPY requirements.txt ./
 RUN python -m pip install --upgrade pip setuptools wheel \
     && pip install --no-binary=Pillow Pillow==12.2.0 \
     && pip install -r requirements.txt \
-    && python -c "from PIL import features; print('RAQM:', features.check('raqm'), 'Harfbuzz:', features.check('harfbuzz'), 'FriBiDi:', features.check('fribidi')); assert features.check('raqm') and features.check('harfbuzz') and features.check('fribidi'), 'Arabic shaping engine is not available'" \
-    && chromium --version
+    && python -c "from PIL import features; print('RAQM:', features.check('raqm'), 'Harfbuzz:', features.check('harfbuzz'), 'FriBiDi:', features.check('fribidi')); assert features.check('raqm') and features.check('harfbuzz') and features.check('fribidi'), 'Arabic shaping engine is not available'"
 
 COPY . .
 RUN mkdir -p /tmp/ziad-data/attachments /tmp/ziad-data/generated /tmp/ziad-data/backups
