@@ -9,6 +9,7 @@ from . import print_engine_v3336
 
 
 BUILD_VERSION = "3.3.36"
+core.APP_VERSION = BUILD_VERSION
 
 
 def _text(value: Any) -> str:
