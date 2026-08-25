@@ -7,7 +7,7 @@ from . import main as core
 from .services import pdf_service
 
 
-BUILD_VERSION = "3.3.40"
+BUILD_VERSION = "3.3.41"
 core.APP_VERSION = BUILD_VERSION
 
 
@@ -101,7 +101,7 @@ _original_render_document_pdf = pdf_service.render_document_pdf
 
 def _browser_only_html_guard(template: dict[str, Any], values: dict[str, Any], output_path):
     if template.get("template_engine") == "html" and template.get("html_template"):
-        raise RuntimeError("HTML templates print from the user's local browser in Ziad Invoices 3.3.40")
+        raise RuntimeError("HTML templates print from the user's local browser in Ziad Invoices 3.3.41")
     return _original_render_document_pdf(template, values, output_path)
 
 
@@ -115,9 +115,10 @@ def _browser_printing_status() -> dict[str, Any]:
         "paper": "A4",
         "preview_scale": "editor-only",
         "print_size": "native-template-A4",
+        "data_font_pt": 15,
         "server_chromium": False,
         "playwright": False,
-        "message": "Preview scaling is editor-only; HTML documents print using each template's native A4 print sizing",
+        "message": "Preview scaling is editor-only; user-entered HTML document data prints at a physical 15pt on native A4 sizing",
     }
 
 
@@ -135,7 +136,7 @@ async def runtime_cache_headers(request: core.Request, call_next):
             "/index.html",
             "/app.js",
             "/styles.css",
-            "/html-browser-print-v3.3.40.js",
+            "/html-browser-print-v3.3.41.js",
         }
         or path.startswith("/form-templates/")
     ):
@@ -143,7 +144,7 @@ async def runtime_cache_headers(request: core.Request, call_next):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     response.headers["X-Ziad-Build"] = BUILD_VERSION
-    response.headers["X-Ziad-Print-Engine"] = "browser-local-native-a4-3.3.40"
+    response.headers["X-Ziad-Print-Engine"] = "browser-local-native-a4-15pt-3.3.41"
     return response
 
 
