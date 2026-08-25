@@ -7,7 +7,7 @@ from . import main as core
 from .services import pdf_service
 
 
-BUILD_VERSION = "3.3.38"
+BUILD_VERSION = "3.3.39"
 core.APP_VERSION = BUILD_VERSION
 
 
@@ -94,14 +94,14 @@ core._existing_payment_voucher_for_request = _existing_payment_voucher_for_reque
 
 
 # HTML documents are printed from the user's own browser to the computer's local
-# printer. Server-side HTML rendering is intentionally disabled so Render never
-# launches a browser process and cannot hit the memory limit because of printing.
+# printer. Server-side HTML rendering stays disabled so Render never launches a
+# browser process for document printing.
 _original_render_document_pdf = pdf_service.render_document_pdf
 
 
 def _browser_only_html_guard(template: dict[str, Any], values: dict[str, Any], output_path):
     if template.get("template_engine") == "html" and template.get("html_template"):
-        raise RuntimeError("HTML templates print from the user's local browser in Ziad Invoices 3.3.38")
+        raise RuntimeError("HTML templates print from the user's local browser in Ziad Invoices 3.3.39")
     return _original_render_document_pdf(template, values, output_path)
 
 
@@ -112,13 +112,14 @@ def _browser_printing_status() -> dict[str, Any]:
     return {
         "ready": True,
         "mode": "browser-local-printer",
+        "paper": "A4",
+        "template_scale": "100%",
         "server_chromium": False,
         "playwright": False,
-        "message": "HTML documents print from the user's browser to the local/default printer",
+        "message": "HTML documents print at true A4 size from the user's browser to the local/default printer",
     }
 
 
-# app.main.health resolves this module global at request time.
 core.printing_status = _browser_printing_status
 pdf_service.printing_status = _browser_printing_status
 
@@ -133,7 +134,7 @@ async def runtime_cache_headers(request: core.Request, call_next):
             "/index.html",
             "/app.js",
             "/styles.css",
-            "/html-browser-print-v3.3.38.js",
+            "/html-browser-print-v3.3.39.js",
         }
         or path.startswith("/form-templates/")
     ):
@@ -141,7 +142,7 @@ async def runtime_cache_headers(request: core.Request, call_next):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     response.headers["X-Ziad-Build"] = BUILD_VERSION
-    response.headers["X-Ziad-Print-Engine"] = "browser-local-printer-3.3.38"
+    response.headers["X-Ziad-Print-Engine"] = "browser-local-a4-100pct-3.3.39"
     return response
 
 
