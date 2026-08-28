@@ -4,10 +4,11 @@ import json
 from typing import Any
 
 from . import main as core
+from .advance_excel import register_advance_excel_routes
 from .services import pdf_service
 
 
-BUILD_VERSION = "3.3.44"
+BUILD_VERSION = "3.3.45"
 core.APP_VERSION = BUILD_VERSION
 
 
@@ -93,6 +94,10 @@ def _existing_payment_voucher_for_request(conn: core.DBConnection, payment_reque
 core._existing_payment_voucher_for_request = _existing_payment_voucher_for_request
 
 
+# Excel import/export endpoints for the Advances (سلف) page.
+register_advance_excel_routes(core)
+
+
 # HTML documents are printed from the user's own browser to the computer's local
 # printer. Server-side HTML rendering stays disabled so Render never launches a
 # browser process for document printing.
@@ -101,7 +106,7 @@ _original_render_document_pdf = pdf_service.render_document_pdf
 
 def _browser_only_html_guard(template: dict[str, Any], values: dict[str, Any], output_path):
     if template.get("template_engine") == "html" and template.get("html_template"):
-        raise RuntimeError("HTML templates print from the user's local browser in Ziad Invoices 3.3.44")
+        raise RuntimeError("HTML templates print from the user's local browser in Ziad Invoices 3.3.45")
     return _original_render_document_pdf(template, values, output_path)
 
 
@@ -140,6 +145,8 @@ async def runtime_cache_headers(request: core.Request, call_next):
             "/app.js",
             "/styles.css",
             "/html-browser-print-v3.3.44.js",
+            "/advances-excel-v3.3.45.js",
+            "/advances-excel-v3.3.45.css",
         }
         or path.startswith("/form-templates/")
     ):
