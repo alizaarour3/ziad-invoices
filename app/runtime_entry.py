@@ -4,11 +4,13 @@ import json
 from typing import Any
 
 from . import main as core
+from . import advance_excel as advance_excel_module
 from .advance_excel import register_advance_excel_routes
+from .advance_excel_fix_v3346 import install_advance_excel_transport_fix
 from .services import pdf_service
 
 
-BUILD_VERSION = "3.3.45"
+BUILD_VERSION = "3.3.46"
 core.APP_VERSION = BUILD_VERSION
 
 
@@ -95,6 +97,10 @@ core._existing_payment_voucher_for_request = _existing_payment_voucher_for_reque
 
 
 # Excel import/export endpoints for the Advances (سلف) page.
+# The generated workbook already exists fully in memory; send it as one buffered
+# response instead of a streamed BytesIO response so Render/proxy disconnects do
+# not surface as browser `Failed to fetch` during downloads.
+install_advance_excel_transport_fix(advance_excel_module)
 register_advance_excel_routes(core)
 
 
@@ -106,7 +112,7 @@ _original_render_document_pdf = pdf_service.render_document_pdf
 
 def _browser_only_html_guard(template: dict[str, Any], values: dict[str, Any], output_path):
     if template.get("template_engine") == "html" and template.get("html_template"):
-        raise RuntimeError("HTML templates print from the user's local browser in Ziad Invoices 3.3.45")
+        raise RuntimeError("HTML templates print from the user's local browser in Ziad Invoices 3.3.46")
     return _original_render_document_pdf(template, values, output_path)
 
 
@@ -145,7 +151,7 @@ async def runtime_cache_headers(request: core.Request, call_next):
             "/app.js",
             "/styles.css",
             "/html-browser-print-v3.3.44.js",
-            "/advances-excel-v3.3.45.js",
+            "/advances-excel-v3.3.46.js",
             "/advances-excel-v3.3.45.css",
         }
         or path.startswith("/form-templates/")
@@ -155,6 +161,7 @@ async def runtime_cache_headers(request: core.Request, call_next):
         response.headers["Expires"] = "0"
     response.headers["X-Ziad-Build"] = BUILD_VERSION
     response.headers["X-Ziad-Print-Engine"] = "browser-local-native-a4-pr16pt-inline-3.3.44"
+    response.headers["X-Ziad-Excel-Transport"] = "buffered-v3.3.46"
     return response
 
 
