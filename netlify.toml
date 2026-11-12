@@ -1,0 +1,28 @@
+# Netlify serves the browser frontend (app/static). The Python/FastAPI backend
+# cannot run on Netlify, so every /api request is proxied to the backend that
+# still runs from the Docker image on Render. The browser only ever talks to the
+# Netlify domain, so the existing CSP (connect-src 'self') keeps working.
+# If the backend moves, change the "to" address below.
+
+[build]
+  publish = "app/static"
+  command = ""
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://ziad-invoices.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# Same browser security headers the FastAPI middleware sets (app/main.py).
+# These apply to the static files Netlify serves; /api responses keep the
+# headers the backend sends.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'self' blob:; base-uri 'self'"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
