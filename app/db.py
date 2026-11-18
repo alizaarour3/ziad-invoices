@@ -637,7 +637,12 @@ def _sync_document_types(conn: DBConnection) -> None:
 
 def permission_page_keys(conn: DBConnection) -> list[str]:
     rows = conn.execute("SELECT code FROM document_types WHERE is_active=1 ORDER BY id").fetchall()
-    return ["dashboard", "loans", "advances", *[f"documents.{row['code']}" for row in rows]]
+    return ["dashboard", "loans", "advances", "capital", *[f"documents.{row['code']}" for row in rows]]
+
+
+# Pages with sensitive financial totals start hidden for non-admin users until an
+# administrator enables them from the permissions page.
+PAGES_HIDDEN_BY_DEFAULT = {"capital"}
 
 
 def ensure_user_page_permissions(conn: DBConnection, user_id: int) -> None:
@@ -645,8 +650,8 @@ def ensure_user_page_permissions(conn: DBConnection, user_id: int) -> None:
     for page_key in permission_page_keys(conn):
         conn.execute(
             "INSERT INTO user_page_permissions(user_id, page_key, can_view, updated_at, updated_by) "
-            "VALUES(?,?,1,?,NULL) ON CONFLICT(user_id,page_key) DO NOTHING",
-            (user_id, page_key, now),
+            "VALUES(?,?,?,?,NULL) ON CONFLICT(user_id,page_key) DO NOTHING",
+            (user_id, page_key, 0 if page_key in PAGES_HIDDEN_BY_DEFAULT else 1, now),
         )
 
 

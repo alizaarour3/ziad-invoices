@@ -7,10 +7,11 @@ from . import main as core
 from . import advance_excel as advance_excel_module
 from .advance_excel import register_advance_excel_routes
 from .advance_excel_fix_v3346 import install_advance_excel_transport_fix
+from .capital import register_capital_routes
 from .services import pdf_service
 
 
-BUILD_VERSION = "3.3.46"
+BUILD_VERSION = "3.3.47"
 core.APP_VERSION = BUILD_VERSION
 
 
@@ -102,6 +103,10 @@ core._existing_payment_voucher_for_request = _existing_payment_voucher_for_reque
 # not surface as browser `Failed to fetch` during downloads.
 install_advance_excel_transport_fix(advance_excel_module)
 register_advance_excel_routes(core)
+
+# Capital routes are registered in app.main; this call keeps the static "/"
+# mount after the advance Excel routes above (otherwise they answer 404).
+register_capital_routes(core)
 
 
 # HTML documents are printed from the user's own browser to the computer's local

@@ -1,4 +1,5 @@
-from __future__ import annotations
+# No `from __future__ import annotations`: FastAPI must resolve the
+# `core.CurrentUser` dependency annotations inside register_advance_excel_routes().
 
 import io
 import re

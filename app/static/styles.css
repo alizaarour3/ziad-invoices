@@ -819,3 +819,16 @@ a:focus-visible, button:focus-visible, .nav-item:focus-visible, .quick-card:focu
 @media(max-width:1100px){.advance-inline-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.advance-inline-form{grid-template-columns:1fr}}
 @media print{.advance-report-notes{break-inside:avoid}}
+
+/* v3.3.47 — رأس المال (capital / cash fund page) */
+.capital-funds { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:14px; margin-bottom:14px; }
+.capital-fund-card { margin-bottom:0; }
+.capital-balance { margin:4px 0 2px; font-size:28px; color:var(--success); }
+.capital-balance small { font-size:13px; color:var(--muted); }
+.capital-balance.is-negative { color:var(--danger); }
+.capital-breakdown { display:grid; gap:6px; padding:0 18px 16px; }
+.capital-breakdown > div { display:flex; justify-content:space-between; gap:12px; padding:7px 10px; border-radius:10px; background:var(--surface-2); font-size:13px; }
+.capital-breakdown .is-plus strong, .capital-amount.is-plus { color:var(--success); }
+.capital-breakdown .is-minus strong, .capital-amount.is-minus { color:var(--danger); }
+.capital-amount { white-space:nowrap; font-weight:800; }
+.capital-review { border-color:var(--danger-soft); }

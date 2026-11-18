@@ -292,6 +292,7 @@ def _managed_pages(conn: DBConnection) -> list[dict[str, str]]:
         {"key": "dashboard", "name_ar": "الداشبورد", "category": "عام"},
         {"key": "loans", "name_ar": "قروض", "category": "المالية"},
         {"key": "advances", "name_ar": "سلف", "category": "المالية"},
+        {"key": "capital", "name_ar": "رأس المال", "category": "المالية"},
     ]
     rows = conn.execute("SELECT code, name_ar FROM document_types WHERE is_active=1 ORDER BY id").fetchall()
     pages.extend(
@@ -2015,3 +2016,12 @@ def download_backup(current: Annotated[CurrentUser, Depends(require("system.mana
 
 # Static application is mounted last so every /api route has priority.
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+
+
+# Capital / cash fund page (رأس المال). Registered here so both the web runtime
+# (app.runtime_entry) and the desktop launcher (desktop.py -> app.main) serve it.
+# The helper keeps the static "/" mount above at the end of the route list.
+import sys as _sys  # noqa: E402
+from .capital import register_capital_routes  # noqa: E402
+
+register_capital_routes(_sys.modules[__name__])

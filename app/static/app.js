@@ -119,6 +119,7 @@ function firstAllowedRoute() {
   if (firstType) return `/documents/${firstType.code}`;
   if (canViewPage('loans')) return '/loans';
   if (canViewPage('advances')) return '/advances';
+  if (canViewPage('capital')) return '/capital';
   return '/no-access';
 }
 function statusBadge(status) { return `<span class="badge badge-${status}">${status === 'draft' ? 'مسودة' : 'محفوظ'}</span>`; }
@@ -296,8 +297,9 @@ function shell(title, content, {active = '', fullWidth = false} = {}) {
   const typeLinks = state.types.map(type => `
     <a class="nav-item ${active === type.code ? 'active' : ''}" href="#/documents/${type.code}" title="${escapeHtml(type.name_ar)}">${icon('file')}<span>${escapeHtml(type.name_ar)}</span><span class="nav-badge">${state.counts[type.code] ?? ''}</span></a>
   `).join('');
-  const financeLinks = (canViewPage('loans') || canViewPage('advances')) ? `
+  const financeLinks = (canViewPage('loans') || canViewPage('advances') || canViewPage('capital')) ? `
     <div class="nav-label">المالية</div>
+    ${canViewPage('capital') ? `<a class="nav-item ${activePath('/capital')}" href="#/capital" title="رأس المال">${icon('wallet')}<span>رأس المال</span></a>` : ''}
     ${canViewPage('loans') ? `<a class="nav-item ${activePath('/loans')}" href="#/loans" title="قروض">${icon('loan')}<span>قروض</span></a>` : ''}
     ${canViewPage('advances') ? `<a class="nav-item ${activePath('/advances')}" href="#/advances" title="سلف">${icon('wallet')}<span>سلف</span></a>` : ''}` : '';
   root.innerHTML = `
@@ -1687,6 +1689,125 @@ async function renderAdvances() {
   draw();
 }
 
+const CAPITAL_KIND_LABELS = {
+  receipt: 'مستند قبض',
+  payment: 'مستند دفع',
+  advance: 'سلفة',
+  advance_repayment: 'تسديد سلفة',
+};
+const CAPITAL_CURRENCY_LABELS = {IQD: 'دينار عراقي', USD: 'دولار أمريكي'};
+
+function capitalMovementLink(item) {
+  if (item.document_id) return `#/documents/${item.document_id}/view`;
+  if (item.advance_id) return `#/advances/${item.advance_id}`;
+  return '';
+}
+
+async function renderCapital() {
+  pageLoading('رأس المال');
+  const data = await api('/api/capital');
+  const canManage = Boolean(data.can_manage);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const fundCard = cur => {
+    const fund = data.funds[cur];
+    const negative = Number(fund.balance) < 0;
+    return `<section class="panel capital-fund-card">
+      <div class="panel-head"><div><span class="eyebrow">صندوق ${CAPITAL_CURRENCY_LABELS[cur]}</span><h3 class="capital-balance mono ${negative ? 'is-negative' : ''}">${formatMoney(fund.balance)} <small>${cur}</small></h3><p>الرصيد الحالي</p></div>${icon('wallet')}</div>
+      <div class="capital-breakdown">
+        <div><span>الرصيد الافتتاحي</span><strong class="mono">${formatMoney(fund.opening)}</strong></div>
+        <div class="is-plus"><span>+ مستندات القبض</span><strong class="mono">${formatMoney(fund.receipts)}</strong></div>
+        <div class="is-minus"><span>− مستندات الدفع</span><strong class="mono">${formatMoney(fund.payments)}</strong></div>
+        ${cur === 'IQD' ? `<div class="is-minus"><span>− السلف</span><strong class="mono">${formatMoney(fund.advances)}</strong></div>
+        <div class="is-plus"><span>+ تسديد السلف</span><strong class="mono">${formatMoney(fund.advance_repayments)}</strong></div>` : ''}
+      </div>
+    </section>`;
+  };
+
+  const settingsForm = canManage ? `
+    <section class="panel">
+      <div class="panel-head"><div><h3>${data.configured ? 'تعديل الصندوق' : 'تحديد صندوق الشركة'}</h3><p>أدخل المبلغ الموجود في الصندوق وتاريخ البداية. تُحسب المستندات والسلف من هذا التاريخ فصاعداً فقط.</p></div>${icon('wallet')}</div>
+      <form id="capital-form" class="loan-inline-form">
+        <div class="form-row"><label>تاريخ البداية</label><input class="control" name="start_date" type="date" required value="${escapeHtml(data.start_date || today)}"></div>
+        <div class="form-row"><label>الرصيد الافتتاحي بالدينار (IQD)</label><input class="control" name="opening_iqd" type="number" min="0" step="0.01" required value="${escapeHtml(data.funds?.IQD?.opening ?? '0')}"></div>
+        <div class="form-row"><label>الرصيد الافتتاحي بالدولار (USD)</label><input class="control" name="opening_usd" type="number" min="0" step="0.01" required value="${escapeHtml(data.funds?.USD?.opening ?? '0')}"></div>
+        <div class="form-row advance-notes-field"><label>ملاحظات</label><input class="control" name="notes" maxlength="1000" placeholder="ملاحظات اختيارية" value="${escapeHtml(data.notes || '')}"></div>
+        <div class="loan-inline-actions"><div id="capital-error" class="error-text"></div><button id="capital-save" class="btn btn-primary" type="submit">${icon('check')} حفظ</button></div>
+      </form>
+    </section>` : '';
+
+  if (!data.configured) {
+    shell('رأس المال', `
+      <div class="page-header"><div><span class="eyebrow">الإدارة المالية</span><h1>رأس المال</h1><p>صندوق الشركة: يزداد مع مستندات القبض، وينقص مع مستندات الدفع والسلف.</p></div></div>
+      ${settingsForm || `<div class="panel"><div class="empty"><div class="stat-icon">${icon('wallet')}</div><h3>لم يُحدَّد صندوق الشركة بعد</h3><p>يجب على مدير النظام تحديد الرصيد الافتتاحي أولاً.</p></div></div>`}`);
+    wireCapitalForm();
+    return;
+  }
+
+  const review = data.needs_review.length ? `
+    <div class="panel capital-review">
+      <div class="panel-head"><div><h3>مستندات تحتاج مراجعة (${data.needs_review.length})</h3><p>لم يتمكن النظام من قراءة المبلغ في هذه المستندات، لذلك لم تُحسب في الرصيد. صحّح خانة المبلغ لتُحسب تلقائياً.</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الرقم</th><th>المبلغ المكتوب</th><th></th></tr></thead><tbody>
+      ${data.needs_review.map(item => `<tr><td class="mono">${escapeHtml(item.date)}</td><td>${CAPITAL_KIND_LABELS[item.kind]}</td><td class="mono">${escapeHtml(item.reference)}</td><td>${escapeHtml(item.raw_amount || '(فارغ)')}</td><td><a class="btn btn-secondary" href="${capitalMovementLink(item)}">فتح</a></td></tr>`).join('')}
+      </tbody></table></div>
+    </div>` : '';
+
+  const shown = data.movements.length;
+  shell('رأس المال', `
+    <div class="page-header"><div><span class="eyebrow">الإدارة المالية</span><h1>رأس المال</h1><p>يُحسب من ${escapeHtml(data.start_date)}${data.updated_by_name ? ` · آخر تعديل بواسطة ${escapeHtml(data.updated_by_name)}` : ''}${data.notes ? ` · ${escapeHtml(data.notes)}` : ''}</p></div></div>
+    <div class="capital-funds">${fundCard('IQD')}${fundCard('USD')}</div>
+    ${review}
+    <div class="panel">
+      <div class="panel-head document-toolbar"><div><h3>حركة الصندوق</h3><p>${shown < data.movement_count ? `آخر ${shown} حركة من ${data.movement_count}` : `${data.movement_count} حركة`}</p></div>
+        <div class="filters"><select id="capital-currency" class="control compact"><option value="">كل العملات</option><option value="IQD">دينار</option><option value="USD">دولار</option></select><select id="capital-kind" class="control compact"><option value="">كل الحركات</option>${Object.entries(CAPITAL_KIND_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div></div>
+      <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الرقم</th><th>الجهة / الاسم</th><th>العملة</th><th>المبلغ</th></tr></thead><tbody id="capital-rows"></tbody></table></div>
+    </div>
+    ${settingsForm}`);
+
+  const draw = () => {
+    const cur = document.getElementById('capital-currency').value;
+    const kind = document.getElementById('capital-kind').value;
+    const rows = data.movements.filter(item => (!cur || item.currency === cur) && (!kind || item.kind === kind));
+    document.getElementById('capital-rows').innerHTML = rows.map(item => {
+      const link = capitalMovementLink(item);
+      const ref = link ? `<a href="${link}">${escapeHtml(item.reference)}</a>` : escapeHtml(item.reference);
+      return `<tr><td class="mono">${escapeHtml(item.date)}</td><td>${CAPITAL_KIND_LABELS[item.kind]}</td><td class="mono">${ref}</td><td>${escapeHtml(item.party || '-')}</td><td>${item.currency}</td><td class="mono capital-amount ${item.direction > 0 ? 'is-plus' : 'is-minus'}">${item.direction > 0 ? '+' : '−'} ${formatMoney(item.amount)}</td></tr>`;
+    }).join('') || `<tr><td colspan="6"><div class="empty"><div class="stat-icon">${icon('wallet')}</div><h3>لا توجد حركات</h3><p>ستظهر هنا مستندات القبض والدفع والسلف من تاريخ البداية.</p></div></td></tr>`;
+  };
+  document.getElementById('capital-currency').addEventListener('change', draw);
+  document.getElementById('capital-kind').addEventListener('change', draw);
+  draw();
+  wireCapitalForm();
+}
+
+function wireCapitalForm() {
+  const form = document.getElementById('capital-form');
+  form?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    const values = new FormData(form);
+    const button = document.getElementById('capital-save');
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="loader"></span> جارٍ الحفظ';
+    document.getElementById('capital-error').textContent = '';
+    try {
+      await api('/api/capital', {method:'PUT', body:{
+        start_date: values.get('start_date'),
+        opening_iqd: values.get('opening_iqd') || '0',
+        opening_usd: values.get('opening_usd') || '0',
+        notes: values.get('notes') || '',
+      }});
+      toast('تم حفظ رأس المال', 'success');
+      await renderCapital();
+    } catch (err) {
+      document.getElementById('capital-error').textContent = err.message;
+      button.disabled = false;
+      button.innerHTML = original;
+    }
+  });
+}
+
 function openAdvanceForm(advance = null, onSaved = renderAdvances) {
   const editing = Boolean(advance);
   const body = `<form id="advance-form" class="form-grid">
@@ -1881,7 +2002,7 @@ function openPermissionsModal(user, pages) {
   if (!user) return;
   const admin = user.role === 'admin';
   const allowed = new Set(user.page_permissions || []);
-  const options = pages.map(page => `<label class="permission-page-option ${admin || allowed.has(page.key) ? 'is-enabled' : ''}"><input type="checkbox" value="${escapeHtml(page.key)}" ${admin || allowed.has(page.key) ? 'checked' : ''} ${admin ? 'disabled' : ''}><span class="permission-page-icon">${page.key === 'dashboard' ? icon('dashboard') : page.key === 'loans' ? icon('loan') : page.key === 'advances' ? icon('wallet') : icon('file')}</span><span><strong>${escapeHtml(page.name_ar)}</strong><small>${escapeHtml(page.category)}</small></span></label>`).join('');
+  const options = pages.map(page => `<label class="permission-page-option ${admin || allowed.has(page.key) ? 'is-enabled' : ''}"><input type="checkbox" value="${escapeHtml(page.key)}" ${admin || allowed.has(page.key) ? 'checked' : ''} ${admin ? 'disabled' : ''}><span class="permission-page-icon">${page.key === 'dashboard' ? icon('dashboard') : page.key === 'loans' ? icon('loan') : (page.key === 'advances' || page.key === 'capital') ? icon('wallet') : icon('file')}</span><span><strong>${escapeHtml(page.name_ar)}</strong><small>${escapeHtml(page.category)}</small></span></label>`).join('');
   const footer = admin
     ? ['<button id="permissions-close" class="btn btn-primary">إغلاق</button>']
     : ['<button id="permissions-cancel" class="btn btn-secondary">إلغاء</button>', `<button id="permissions-save" class="btn btn-primary">${icon('save')} حفظ الصلاحيات</button>`];
@@ -1912,7 +2033,7 @@ async function renderAudit() {
   const actionNames = {
     'auth.login':'تسجيل دخول','auth.logout':'تسجيل خروج','auth.login_failed':'محاولة دخول فاشلة','auth.password_changed':'تغيير كلمة المرور','system.setup':'إعداد النظام',
     'document.create':'إنشاء مستند','document.update':'تعديل مستند','document.convert_payment_request':'تحويل طلب صرف إلى مستند دفع','document.delete_permanent':'حذف مستند نهائياً','document.print_export':'طباعة/تصدير',
-    'attachment.upload':'رفع مرفق','attachment.delete':'حذف مرفق','attachment.update':'تعديل مرفق','loan.create':'إنشاء قرض','loan.update':'تعديل قرض','loan.payment':'تسديد قرض','loan.delete_permanent':'حذف قرض نهائياً','advance.create':'إضافة سلفة','advance.update':'تعديل سلفة','advance.payment':'تسديد سلفة','advance.delete_permanent':'حذف سلفة نهائياً','user.create':'إنشاء مستخدم','user.update':'تعديل مستخدم','permission.update':'تعديل صلاحيات الصفحات','system.backup':'إنشاء نسخة احتياطية'
+    'attachment.upload':'رفع مرفق','attachment.delete':'حذف مرفق','attachment.update':'تعديل مرفق','loan.create':'إنشاء قرض','loan.update':'تعديل قرض','loan.payment':'تسديد قرض','loan.delete_permanent':'حذف قرض نهائياً','advance.create':'إضافة سلفة','advance.update':'تعديل سلفة','advance.payment':'تسديد سلفة','advance.delete_permanent':'حذف سلفة نهائياً','user.create':'إنشاء مستخدم','user.update':'تعديل مستخدم','permission.update':'تعديل صلاحيات الصفحات','system.backup':'إنشاء نسخة احتياطية','capital.update':'تعديل رأس المال'
   };
   const categoryOf = action => action.startsWith('document.') ? 'documents' : action.startsWith('attachment.') ? 'attachments' : action.startsWith('loan.') ? 'loans' : action.startsWith('advance.') ? 'advances' : (action.startsWith('user.') || action.startsWith('permission.')) ? 'users' : action.startsWith('auth.') ? 'auth' : 'system';
   const failedLogins = logs.filter(item => item.action === 'auth.login_failed').length;
@@ -2017,6 +2138,7 @@ async function route() {
     if (loanReportMatch) { if (canViewPage('loans')) return renderLoanReport(Number(loanReportMatch[1])); return navigate(firstAllowedRoute()); }
     let loanMatch = path.match(/^\/loans\/(\d+)$/);
     if (loanMatch) { if (canViewPage('loans')) return renderLoanDetails(Number(loanMatch[1])); return navigate(firstAllowedRoute()); }
+    if (path === '/capital') { if (canViewPage('capital')) return renderCapital(); return navigate(firstAllowedRoute()); }
     if (path === '/advances') { if (canViewPage('advances')) return renderAdvances(); return navigate(firstAllowedRoute()); }
     let advanceReportMatch = path.match(/^\/advances\/(\d+)\/report$/);
     if (advanceReportMatch) { if (canViewPage('advances')) return renderAdvanceReport(Number(advanceReportMatch[1])); return navigate(firstAllowedRoute()); }

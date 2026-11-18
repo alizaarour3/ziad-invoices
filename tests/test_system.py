@@ -13,6 +13,7 @@ TEST_DATA = Path(__file__).resolve().parent / ".test-data"
 os.environ["ZIAD_DATA_DIR"] = str(TEST_DATA)
 
 from app.main import app  # noqa: E402
+from app.services.backup_service import APP_VERSION  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -248,6 +249,7 @@ def test_users_and_permissions():
         assert "documents.TR" in me.json()["page_permissions"]
         assert "loans" in me.json()["page_permissions"]
         assert "advances" in me.json()["page_permissions"]
+        assert "capital" not in me.json()["page_permissions"]
         assert client.get("/api/documents", headers=viewer_headers).status_code == 200
         assert client.post("/api/documents", headers=viewer_headers, json={"type_code": "PR", "fields": {}}).status_code == 403
         assert client.get("/api/users", headers=viewer_headers).status_code == 403
@@ -261,7 +263,7 @@ def test_users_and_permissions():
         permissions = client.get("/api/permissions", headers=admin_headers)
         assert permissions.status_code == 200
         assert {page["key"] for page in permissions.json()["pages"]} == {
-            "dashboard", "loans", "advances", "documents.RV", "documents.PR", "documents.PV", "documents.VM", "documents.TR"
+            "dashboard", "loans", "advances", "capital", "documents.RV", "documents.PR", "documents.PV", "documents.VM", "documents.TR"
         }
         changed = client.put(
             f"/api/permissions/users/{editor['id']}",
@@ -316,7 +318,7 @@ def test_system_status_and_backup():
         status_response = client.get('/api/system/status', headers=headers)
         assert status_response.status_code == 200
         status_data = status_response.json()
-        assert status_data['version'] == '3.3.20'
+        assert status_data['version'] == APP_VERSION
         assert status_data['database']['ok'] is True
         assert status_data['printing']['ready'] is True
         assert status_data['printing']['chromium'] is True
@@ -340,7 +342,7 @@ def test_system_status_and_backup():
             assert 'app/static/form-templates/receipt-voucher.html' in names
             assert 'app/static/form-templates/request-transfer.html' in names
             manifest = json.loads(archive.read('manifest.json'))
-            assert manifest['version'] == '3.3.20'
+            assert manifest['version'] == APP_VERSION
             assert manifest['files']
 
 
