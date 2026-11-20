@@ -11,7 +11,7 @@ from .capital import register_capital_routes
 from .services import pdf_service
 
 
-BUILD_VERSION = "3.3.47"
+BUILD_VERSION = "3.3.48"
 core.APP_VERSION = BUILD_VERSION
 
 

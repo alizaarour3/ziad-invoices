@@ -832,3 +832,35 @@ a:focus-visible, button:focus-visible, .nav-item:focus-visible, .quick-card:focu
 .capital-breakdown .is-minus strong, .capital-amount.is-minus { color:var(--danger); }
 .capital-amount { white-space:nowrap; font-weight:800; }
 .capital-review { border-color:var(--danger-soft); }
+
+/* v3.3.48 — تقرير رأس المال اليومي */
+.capital-report-range { display:grid; grid-template-columns:repeat(2, minmax(0, 220px)) 1fr; gap:12px; align-items:end; padding:14px 18px; max-width:1100px; margin:0 auto 14px; }
+.capital-report-range .form-row { margin:0; }
+.capital-report-range-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+.capital-report-summary table th { text-align:right; font-weight:700; }
+.capital-report-summary tr.is-total th, .capital-report-summary tr.is-total td { font-weight:800; background:#fbfaf6; }
+.capital-report-summary tr.is-closing th, .capital-report-summary tr.is-closing td { color:var(--primary); background:var(--primary-soft); }
+.capital-report-table td.capital-report-desc { max-width:220px; white-space:normal; color:var(--muted); }
+.capital-report-warning { margin:0 0 20px; padding:12px 14px; border:1px solid #efc9c3; border-radius:12px; background:var(--danger-soft); color:var(--danger); font-size:12px; line-height:1.8; }
+.capital-report-warning strong { display:block; }
+.capital-report-signatures { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; margin-top:28px; }
+.capital-report-signatures > div { display:grid; gap:6px; text-align:center; }
+.capital-report-signatures span { font-size:12px; font-weight:800; color:var(--muted); }
+.capital-report-signatures strong { display:block; min-height:34px; border-bottom:1px solid #9aa59f; padding-top:10px; font-size:13px; }
+@media (max-width:760px) { .capital-report-range { grid-template-columns:1fr 1fr; } .capital-report-range-actions { grid-column:1 / -1; justify-content:stretch; } .capital-report-range-actions .btn { flex:1; } }
+@media print {
+  .capital-report-range { display:none !important; }
+  .capital-report-paper .capital-amount { color:#14231d !important; }
+  .capital-report-table { font-size:9.5px; }
+  .capital-report-summary, .capital-report-signatures, .capital-report-warning { break-inside:avoid; }
+}
+/* Report tables fit the A4 paper instead of the 850px app-table minimum. */
+.capital-report-summary table { min-width:0; }
+.capital-report-summary tbody th { background:transparent; position:static; text-transform:none; letter-spacing:0; font-size:13px; color:var(--text); }
+.capital-report-table { min-width:760px; }
+@media print {
+  .capital-report-paper table { min-width:0 !important; width:100% !important; }
+  .capital-report-paper th, .capital-report-paper td { padding:6px 7px; }
+  .capital-report-paper .table-wrap { overflow:visible !important; }
+  .capital-report-table td.capital-report-desc { max-width:120px; }
+}

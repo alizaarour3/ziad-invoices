@@ -1707,7 +1707,7 @@ async function renderCapital() {
   pageLoading('رأس المال');
   const data = await api('/api/capital');
   const canManage = Boolean(data.can_manage);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
 
   const fundCard = cur => {
     const fund = data.funds[cur];
@@ -1754,7 +1754,7 @@ async function renderCapital() {
 
   const shown = data.movements.length;
   shell('رأس المال', `
-    <div class="page-header"><div><span class="eyebrow">الإدارة المالية</span><h1>رأس المال</h1><p>يُحسب من ${escapeHtml(data.start_date)}${data.updated_by_name ? ` · آخر تعديل بواسطة ${escapeHtml(data.updated_by_name)}` : ''}${data.notes ? ` · ${escapeHtml(data.notes)}` : ''}</p></div></div>
+    <div class="page-header"><div><span class="eyebrow">الإدارة المالية</span><h1>رأس المال</h1><p>يُحسب من ${escapeHtml(data.start_date)}${data.updated_by_name ? ` · آخر تعديل بواسطة ${escapeHtml(data.updated_by_name)}` : ''}${data.notes ? ` · ${escapeHtml(data.notes)}` : ''}</p></div><div class="page-actions"><a class="btn btn-primary" href="#/capital/report">${icon('print')} التقرير اليومي</a></div></div>
     <div class="capital-funds">${fundCard('IQD')}${fundCard('USD')}</div>
     ${review}
     <div class="panel">
@@ -1778,6 +1778,167 @@ async function renderCapital() {
   document.getElementById('capital-kind').addEventListener('change', draw);
   draw();
   wireCapitalForm();
+}
+
+function localToday() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+async function downloadApiFile(path, filename, button) {
+  const original = button?.innerHTML;
+  if (button) { button.disabled = true; button.innerHTML = '<span class="loader"></span> جارٍ التجهيز'; }
+  try {
+    const response = await api(path);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('تم تجهيز ملف Excel بنجاح', 'success');
+  } catch (err) {
+    toast(err.message || 'تعذر تصدير الملف', 'error');
+  } finally {
+    if (button?.isConnected) { button.disabled = false; button.innerHTML = original; }
+  }
+}
+
+state.capitalReportRange = state.capitalReportRange || null;
+
+async function renderCapitalReport() {
+  const today = localToday();
+  const range = state.capitalReportRange || {from: today, to: today};
+  pageLoading('تقرير رأس المال');
+  let report;
+  let loadError = '';
+  try {
+    const params = new URLSearchParams({date_from: range.from, date_to: range.to});
+    report = await api(`/api/capital/report?${params}`);
+  } catch (err) {
+    loadError = err.message;
+  }
+
+  const singleDay = range.from === range.to;
+  const periodLabel = singleDay ? range.from : `من ${range.from} إلى ${range.to}`;
+  const header = `
+    <div class="page-header loan-report-screen-header capital-report-screen-header">
+      <div><span class="eyebrow">رأس المال</span><h1>التقرير اليومي للصندوق</h1><p>اختر اليوم أو فترة، ثم اطبع التقرير أو صدّره إلى Excel.</p></div>
+      <div class="page-actions">
+        <a class="btn btn-secondary" href="#/capital">${icon('chevron')} رجوع</a>
+        <button id="capital-report-excel" class="btn btn-secondary" ${report ? '' : 'disabled'}>${icon('download')} تصدير Excel</button>
+        <button id="capital-report-print" class="btn btn-primary" ${report ? '' : 'disabled'}>${icon('print')} طباعة / حفظ PDF</button>
+      </div>
+    </div>
+    <form id="capital-report-range" class="panel capital-report-range">
+      <div class="form-row"><label>من تاريخ</label><input class="control" type="date" name="from" required value="${escapeHtml(range.from)}"></div>
+      <div class="form-row"><label>إلى تاريخ</label><input class="control" type="date" name="to" required value="${escapeHtml(range.to)}"></div>
+      <div class="capital-report-range-actions">
+        <button type="button" class="btn btn-secondary" data-range="today">اليوم</button>
+        <button type="button" class="btn btn-secondary" data-range="yesterday">أمس</button>
+        <button type="submit" class="btn btn-primary">عرض التقرير</button>
+      </div>
+    </form>`;
+
+  if (!report) {
+    shell('تقرير رأس المال', `${header}<div class="panel"><div class="empty"><div class="stat-icon">${icon('wallet')}</div><h3>تعذر إصدار التقرير</h3><p>${escapeHtml(loadError)}</p></div></div>`, {active: ''});
+    wireCapitalReportControls(range, null);
+    return;
+  }
+
+  const funds = report.funds;
+  const summaryRow = (label, key, cls = '') => `<tr class="${cls}"><th>${label}</th>${['IQD', 'USD'].map(cur => `<td class="mono">${formatMoney(funds[cur][key])}</td>`).join('')}</tr>`;
+  const movementRows = report.movements.map((item, index) => `<tr>
+      <td>${index + 1}</td>
+      ${singleDay ? '' : `<td class="mono">${escapeHtml(item.date)}</td>`}
+      <td>${CAPITAL_KIND_LABELS[item.kind]}</td>
+      <td class="mono">${escapeHtml(item.reference)}</td>
+      <td>${escapeHtml(item.party || '-')}</td>
+      <td class="capital-report-desc">${escapeHtml(item.description || '-')}</td>
+      <td>${item.currency}</td>
+      <td class="mono capital-amount is-plus">${item.direction > 0 ? formatMoney(item.amount) : ''}</td>
+      <td class="mono capital-amount is-minus">${item.direction < 0 ? formatMoney(item.amount) : ''}</td>
+      <td class="mono">${formatMoney(item.balance_after)}</td>
+    </tr>`).join('');
+  const columnCount = singleDay ? 9 : 10;
+  const review = report.needs_review.length ? `
+    <section class="capital-report-warning">
+      <strong>تنبيه: ${report.needs_review.length} مستند في هذه الفترة لم يُحسب لأن مبلغه غير مقروء:</strong>
+      <span>${report.needs_review.map(item => `${escapeHtml(item.reference)} (${escapeHtml(item.raw_amount || 'فارغ')})`).join('، ')}</span>
+    </section>` : '';
+
+  shell('تقرير رأس المال', `${header}
+    <article class="loan-report-paper capital-report-paper" id="capital-report-paper">
+      <header class="loan-report-top">
+        <div><p>نظام المستندات — تقرير الصندوق</p><h2>${singleDay ? 'التقرير اليومي لرأس المال' : 'تقرير رأس المال لفترة'}</h2><p>${singleDay ? 'التاريخ' : 'الفترة'}: <strong>${escapeHtml(periodLabel)}</strong></p></div>
+        <span class="loan-report-status paid">${report.movements.length} حركة</span>
+      </header>
+      <section class="loan-report-grid capital-report-cards">
+        <div class="loan-report-card"><span>رصيد الدينار أول ${singleDay ? 'اليوم' : 'الفترة'}</span><strong>${formatMoney(funds.IQD.opening)}</strong></div>
+        <div class="loan-report-card emphasis"><span>رصيد الدينار آخر ${singleDay ? 'اليوم' : 'الفترة'}</span><strong>${formatMoney(funds.IQD.closing)}</strong></div>
+        <div class="loan-report-card emphasis"><span>رصيد الدولار آخر ${singleDay ? 'اليوم' : 'الفترة'}</span><strong>${formatMoney(funds.USD.closing)}</strong></div>
+      </section>
+      <section class="loan-report-history capital-report-summary">
+        <h3>ملخص الصندوق</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>البند</th><th>دينار عراقي (IQD)</th><th>دولار أمريكي (USD)</th></tr></thead>
+          <tbody>
+            ${summaryRow(`الرصيد في بداية ${singleDay ? 'اليوم' : 'الفترة'}`, 'opening', 'is-total')}
+            ${summaryRow('+ مستندات القبض', 'receipts')}
+            ${summaryRow('− مستندات الدفع', 'payments')}
+            ${summaryRow('− السلف', 'advances')}
+            ${summaryRow('+ تسديد السلف', 'advance_repayments')}
+            ${summaryRow('صافي الحركة', 'net')}
+            ${summaryRow(`الرصيد في نهاية ${singleDay ? 'اليوم' : 'الفترة'}`, 'closing', 'is-total is-closing')}
+          </tbody>
+        </table></div>
+      </section>
+      ${review}
+      <section class="loan-report-history">
+        <h3>حركات الصندوق</h3>
+        <div class="table-wrap"><table class="capital-report-table">
+          <thead><tr><th>#</th>${singleDay ? '' : '<th>التاريخ</th>'}<th>النوع</th><th>الرقم</th><th>الجهة / الاسم</th><th>البيان</th><th>العملة</th><th>وارد (+)</th><th>صادر (−)</th><th>الرصيد</th></tr></thead>
+          <tbody>${movementRows || `<tr><td colspan="${columnCount}" class="empty">لا توجد حركات في ${singleDay ? 'هذا اليوم' : 'هذه الفترة'}.</td></tr>`}</tbody>
+        </table></div>
+      </section>
+      <section class="capital-report-signatures">
+        <div><span>أعدّه</span><strong>${escapeHtml(state.user?.full_name || '')}</strong></div>
+        <div><span>المحاسب</span><strong></strong></div>
+        <div><span>المدير المالي</span><strong></strong></div>
+      </section>
+      <footer class="loan-report-meta"><span>بداية احتساب الصندوق: <strong>${escapeHtml(report.start_date)}</strong></span><span>تاريخ إصدار التقرير: <strong>${escapeHtml(new Date().toLocaleString('ar-IQ'))}</strong></span></footer>
+    </article>`, {active: ''});
+  wireCapitalReportControls(range, report);
+}
+
+function wireCapitalReportControls(range, report) {
+  const form = document.getElementById('capital-report-range');
+  const apply = (from, to) => { state.capitalReportRange = {from, to}; renderCapitalReport(); };
+  form?.addEventListener('submit', event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    const values = new FormData(form);
+    const from = values.get('from');
+    const to = values.get('to');
+    if (to < from) { toast('تاريخ النهاية يجب أن يكون بعد تاريخ البداية', 'error'); return; }
+    apply(from, to);
+  });
+  form?.querySelectorAll('[data-range]').forEach(button => button.addEventListener('click', () => {
+    const day = new Date();
+    if (button.dataset.range === 'yesterday') day.setDate(day.getDate() - 1);
+    const iso = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    apply(iso, iso);
+  }));
+  document.getElementById('capital-report-print')?.addEventListener('click', () => window.print());
+  document.getElementById('capital-report-excel')?.addEventListener('click', event => {
+    if (!report) return;
+    const params = new URLSearchParams({date_from: range.from, date_to: range.to});
+    const suffix = range.from === range.to ? range.from : `${range.from}_${range.to}`;
+    downloadApiFile(`/api/capital/report.xlsx?${params}`, `capital-report-${suffix}.xlsx`, event.currentTarget);
+  });
 }
 
 function wireCapitalForm() {
@@ -2139,6 +2300,7 @@ async function route() {
     let loanMatch = path.match(/^\/loans\/(\d+)$/);
     if (loanMatch) { if (canViewPage('loans')) return renderLoanDetails(Number(loanMatch[1])); return navigate(firstAllowedRoute()); }
     if (path === '/capital') { if (canViewPage('capital')) return renderCapital(); return navigate(firstAllowedRoute()); }
+    if (path === '/capital/report') { if (canViewPage('capital')) return renderCapitalReport(); return navigate(firstAllowedRoute()); }
     if (path === '/advances') { if (canViewPage('advances')) return renderAdvances(); return navigate(firstAllowedRoute()); }
     let advanceReportMatch = path.match(/^\/advances\/(\d+)\/report$/);
     if (advanceReportMatch) { if (canViewPage('advances')) return renderAdvanceReport(Number(advanceReportMatch[1])); return navigate(firstAllowedRoute()); }

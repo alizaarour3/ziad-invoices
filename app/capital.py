@@ -23,7 +23,10 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Annotated, Any
 
-from fastapi import Depends
+from urllib.parse import quote
+
+from fastapi import Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 SETTINGS_KEY = "capital_fund"
@@ -119,13 +122,35 @@ def load_config(conn: Any) -> dict[str, Any] | None:
     return config
 
 
-def compute_capital(conn: Any, config: dict[str, Any]) -> dict[str, Any]:
-    start = str(config["start_date"])
-    opening = {cur: Decimal(str(config.get("opening", {}).get(cur, "0"))) for cur in CURRENCIES}
-    totals = {
-        cur: {"receipts": Decimal(0), "payments": Decimal(0), "advances": Decimal(0), "advance_repayments": Decimal(0)}
-        for cur in CURRENCIES
-    }
+KIND_FIELD = {
+    "receipt": "receipts",
+    "payment": "payments",
+    "advance": "advances",
+    "advance_repayment": "advance_repayments",
+}
+KIND_LABELS = {
+    "receipt": "مستند قبض",
+    "payment": "مستند دفع",
+    "advance": "سلفة",
+    "advance_repayment": "تسديد سلفة",
+}
+CURRENCY_LABELS = {"IQD": "دينار عراقي", "USD": "دولار أمريكي"}
+
+
+def _empty_totals() -> dict[str, Decimal]:
+    return {field: Decimal(0) for field in KIND_FIELD.values()}
+
+
+def _net(totals: dict[str, Decimal]) -> Decimal:
+    return totals["receipts"] - totals["payments"] - totals["advances"] + totals["advance_repayments"]
+
+
+def collect_movements(conn: Any, start: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Every cash movement dated on/after `start`, oldest first.
+
+    Each movement carries `value` (Decimal, unsigned) plus display fields.
+    Vouchers whose amount cannot be read are returned separately for review.
+    """
     movements: list[dict[str, Any]] = []
     needs_review: list[dict[str, Any]] = []
 
@@ -141,6 +166,8 @@ def compute_capital(conn: Any, config: dict[str, Any]) -> dict[str, Any]:
             fields = json.loads(row["field_values_json"]) or {}
         except (TypeError, ValueError):
             fields = {}
+        if not isinstance(fields, dict):
+            fields = {}
         when = parse_doc_date(fields.get("date"), row["created_at"])
         if when < start:
             continue
@@ -155,47 +182,68 @@ def compute_capital(conn: Any, config: dict[str, Any]) -> dict[str, Any]:
             "document_id": int(row["id"]),
             "reference": row["document_number"],
             "party": str(party or "").strip(),
+            "description": str((fields.get("about") if is_receipt else fields.get("purpose")) or "").strip(),
             "currency": currency,
         }
         if amount is None:
             needs_review.append({**base, "raw_amount": str(raw_amount or "")})
             continue
-        totals[currency]["receipts" if is_receipt else "payments"] += amount
-        movements.append({**base, "amount": _money(amount), "direction": 1 if is_receipt else -1})
+        movements.append({**base, "value": amount, "direction": 1 if is_receipt else -1})
 
-    for row in conn.execute("SELECT id, person_name, amount_minor, created_at FROM advances").fetchall():
+    for row in conn.execute("SELECT id, person_name, amount_minor, notes, created_at FROM advances").fetchall():
         when = str(row["created_at"])[:10]
         if when < start:
             continue
-        amount = Decimal(int(row["amount_minor"])) / 100
-        totals["IQD"]["advances"] += amount
         movements.append({
             "kind": "advance", "date": when, "advance_id": int(row["id"]), "reference": f"سلفة #{row['id']}",
-            "party": row["person_name"], "currency": "IQD", "amount": _money(amount), "direction": -1,
+            "party": row["person_name"], "description": str(row["notes"] or "").strip(), "currency": "IQD",
+            "value": Decimal(int(row["amount_minor"])) / 100, "direction": -1,
         })
 
     for row in conn.execute(
-        "SELECT p.id, p.advance_id, p.amount_minor, p.paid_at, a.person_name "
+        "SELECT p.id, p.advance_id, p.amount_minor, p.notes, p.paid_at, a.person_name "
         "FROM advance_payments p JOIN advances a ON a.id=p.advance_id"
     ).fetchall():
         when = str(row["paid_at"])[:10]
         if when < start:
             continue
-        amount = Decimal(int(row["amount_minor"])) / 100
-        totals["IQD"]["advance_repayments"] += amount
         movements.append({
             "kind": "advance_repayment", "date": when, "advance_id": int(row["advance_id"]),
             "reference": f"تسديد سلفة #{row['advance_id']}", "party": row["person_name"],
-            "currency": "IQD", "amount": _money(amount), "direction": 1,
+            "description": str(row["notes"] or "").strip(), "currency": "IQD",
+            "value": Decimal(int(row["amount_minor"])) / 100, "direction": 1,
         })
 
-    movements.sort(key=lambda item: (item["date"], item["reference"]), reverse=True)
-    needs_review.sort(key=lambda item: item["date"], reverse=True)
+    movements.sort(key=lambda item: (item["date"], item["reference"]))
+    needs_review.sort(key=lambda item: (item["date"], item["reference"]))
+    return movements, needs_review
+
+
+def _public_movement(item: dict[str, Any], **extra: Any) -> dict[str, Any]:
+    out = {key: value for key, value in item.items() if key != "value"}
+    out["amount"] = _money(item["value"])
+    out.update(extra)
+    return out
+
+
+def _opening_balances(config: dict[str, Any]) -> dict[str, Decimal]:
+    return {cur: Decimal(str(config.get("opening", {}).get(cur, "0"))) for cur in CURRENCIES}
+
+
+def compute_capital(conn: Any, config: dict[str, Any]) -> dict[str, Any]:
+    start = str(config["start_date"])
+    opening = _opening_balances(config)
+    movements, needs_review = collect_movements(conn, start)
+    totals = {cur: _empty_totals() for cur in CURRENCIES}
+    for item in movements:
+        totals[item["currency"]][KIND_FIELD[item["kind"]]] += item["value"]
+
     funds = {}
     for cur in CURRENCIES:
         t = totals[cur]
-        balance = opening[cur] + t["receipts"] - t["payments"] - t["advances"] + t["advance_repayments"]
-        funds[cur] = {"opening": _money(opening[cur]), **{k: _money(v) for k, v in t.items()}, "balance": _money(balance)}
+        funds[cur] = {"opening": _money(opening[cur]), **{k: _money(v) for k, v in t.items()},
+                      "balance": _money(opening[cur] + _net(t))}
+    newest_first = list(reversed(movements))
     return {
         "configured": True,
         "start_date": start,
@@ -203,10 +251,162 @@ def compute_capital(conn: Any, config: dict[str, Any]) -> dict[str, Any]:
         "updated_at": config.get("updated_at"),
         "updated_by_name": config.get("updated_by_name"),
         "funds": funds,
-        "movements": movements[:RECENT_LIMIT],
+        "movements": [_public_movement(item) for item in newest_first[:RECENT_LIMIT]],
         "movement_count": len(movements),
-        "needs_review": needs_review,
+        "needs_review": list(reversed(needs_review)),
     }
+
+
+def build_report(conn: Any, config: dict[str, Any], date_from: str, date_to: str) -> dict[str, Any]:
+    """Cash report for [date_from, date_to]: balance at the start of the first
+    day, that period's movements with a running balance, and closing balance."""
+    start = str(config["start_date"])
+    opening = _opening_balances(config)
+    movements, needs_review = collect_movements(conn, start)
+
+    period_opening = dict(opening)
+    period_totals = {cur: _empty_totals() for cur in CURRENCIES}
+    running = {}
+    rows: list[dict[str, Any]] = []
+    for item in movements:
+        cur = item["currency"]
+        if item["date"] < date_from:
+            period_opening[cur] += item["value"] * item["direction"]
+            continue
+        if item["date"] > date_to:
+            continue
+        if cur not in running:
+            running[cur] = period_opening[cur]
+        running[cur] += item["value"] * item["direction"]
+        period_totals[cur][KIND_FIELD[item["kind"]]] += item["value"]
+        rows.append(_public_movement(item, balance_after=_money(running[cur])))
+
+    funds = {}
+    for cur in CURRENCIES:
+        t = period_totals[cur]
+        funds[cur] = {
+            "opening": _money(period_opening[cur]),
+            **{k: _money(v) for k, v in t.items()},
+            "net": _money(_net(t)),
+            "closing": _money(period_opening[cur] + _net(t)),
+        }
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "start_date": start,
+        "funds": funds,
+        "movements": rows,
+        "needs_review": [item for item in needs_review if date_from <= item["date"] <= date_to],
+    }
+
+
+def report_workbook(report: dict[str, Any], prepared_by: str) -> bytes:
+    """Excel version of build_report(): a summary sheet and a movements sheet."""
+    import io
+    from datetime import datetime
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    green = "0E6B4F"
+    header_fill = PatternFill("solid", fgColor=green)
+    header_font = Font(color="FFFFFF", bold=True, size=11)
+    thin = Side(style="thin", color="CFC7B2")
+    money_format = "#,##0.00"
+
+    def style_header(ws, row_number):
+        for cell in ws[row_number]:
+            if cell.value is None:
+                continue
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = Border(bottom=thin)
+        ws.row_dimensions[row_number].height = 24
+
+    period = report["date_from"] if report["date_from"] == report["date_to"] else f"{report['date_from']} → {report['date_to']}"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "ملخص"
+    ws.sheet_view.rightToLeft = True
+    ws["A1"] = "تقرير رأس المال — الصندوق"
+    ws["A1"].font = Font(size=18, bold=True, color=green)
+    ws.merge_cells("A1:C1")
+    meta = [
+        ("الفترة", period),
+        ("بداية احتساب الصندوق", report["start_date"]),
+        ("أعدّه", prepared_by),
+        ("تاريخ التصدير", datetime.now().strftime("%Y-%m-%d %H:%M")),
+    ]
+    for offset, (label, value) in enumerate(meta):
+        ws.cell(3 + offset, 1, label).font = Font(bold=True)
+        ws.cell(3 + offset, 2, value)
+
+    header_row = 3 + len(meta) + 1
+    ws.cell(header_row, 1, "البند")
+    for col, cur in enumerate(CURRENCIES, start=2):
+        ws.cell(header_row, col, f"{CURRENCY_LABELS[cur]} ({cur})")
+    style_header(ws, header_row)
+    lines = [
+        ("الرصيد في بداية الفترة", "opening"),
+        ("+ مستندات القبض", "receipts"),
+        ("− مستندات الدفع", "payments"),
+        ("− السلف", "advances"),
+        ("+ تسديد السلف", "advance_repayments"),
+        ("صافي الحركة", "net"),
+        ("الرصيد في نهاية الفترة", "closing"),
+    ]
+    for offset, (label, key) in enumerate(lines, start=1):
+        row = header_row + offset
+        ws.cell(row, 1, label)
+        for col, cur in enumerate(CURRENCIES, start=2):
+            cell = ws.cell(row, col, float(Decimal(report["funds"][cur][key])))
+            cell.number_format = money_format
+        if key in ("opening", "closing"):
+            for col in range(1, len(CURRENCIES) + 2):
+                ws.cell(row, col).font = Font(bold=True, color=green if key == "closing" else "000000")
+    ws.column_dimensions["A"].width = 28
+    for col in range(2, len(CURRENCIES) + 2):
+        ws.column_dimensions[get_column_letter(col)].width = 24
+
+    if report["needs_review"]:
+        row = header_row + len(lines) + 2
+        ws.cell(row, 1, f"تنبيه: {len(report['needs_review'])} مستند في هذه الفترة لم يُحسب لأن مبلغه غير مقروء — راجع ورقة «تحتاج مراجعة».").font = Font(bold=True, color="AD2B21")
+
+    ws2 = wb.create_sheet("الحركات")
+    ws2.sheet_view.rightToLeft = True
+    headers = ["التاريخ", "النوع", "الرقم", "الجهة / الاسم", "البيان", "العملة", "وارد (+)", "صادر (−)", "الرصيد بعد الحركة"]
+    ws2.append(headers)
+    style_header(ws2, 1)
+    for item in report["movements"]:
+        value = float(Decimal(item["amount"]))
+        ws2.append([
+            item["date"], KIND_LABELS[item["kind"]], item["reference"], item["party"], item.get("description", ""),
+            item["currency"], value if item["direction"] > 0 else None, value if item["direction"] < 0 else None,
+            float(Decimal(item["balance_after"])),
+        ])
+    for row in ws2.iter_rows(min_row=2, min_col=7, max_col=9):
+        for cell in row:
+            cell.number_format = money_format
+    widths = [12, 14, 16, 26, 36, 8, 16, 16, 18]
+    for col, width in enumerate(widths, start=1):
+        ws2.column_dimensions[get_column_letter(col)].width = width
+    ws2.freeze_panes = "A2"
+
+    if report["needs_review"]:
+        ws3 = wb.create_sheet("تحتاج مراجعة")
+        ws3.sheet_view.rightToLeft = True
+        ws3.append(["التاريخ", "النوع", "الرقم", "الجهة / الاسم", "العملة", "المبلغ المكتوب"])
+        style_header(ws3, 1)
+        for item in report["needs_review"]:
+            ws3.append([item["date"], KIND_LABELS[item["kind"]], item["reference"], item["party"], item["currency"], item["raw_amount"] or "(فارغ)"])
+        for col, width in enumerate([12, 14, 16, 26, 8, 30], start=1):
+            ws3.column_dimensions[get_column_letter(col)].width = width
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
 
 
 def keep_static_mount_last(app: Any) -> None:
@@ -280,5 +480,57 @@ def register_capital_routes(core: Any) -> None:
             return result
         finally:
             conn.close()
+
+    def _report_for(conn: Any, user: Any, date_from: date | None, date_to: date | None) -> dict[str, Any]:
+        core._require_page_access(conn, user, PAGE_KEY)
+        config = load_config(conn)
+        if not config:
+            raise HTTPException(status_code=404, detail="لم يُحدَّد صندوق الشركة بعد")
+        day_from = (date_from or date_to or date.today()).isoformat()
+        day_to = (date_to or date_from or date.today()).isoformat()
+        if day_to < day_from:
+            raise HTTPException(status_code=422, detail="تاريخ النهاية يجب أن يكون بعد تاريخ البداية")
+        if day_from < str(config["start_date"]):
+            raise HTTPException(
+                status_code=422,
+                detail=f"لا يمكن إصدار تقرير قبل تاريخ بداية الصندوق ({config['start_date']})",
+            )
+        return build_report(conn, config, day_from, day_to)
+
+    @core.app.get("/api/capital/report")
+    def capital_report(
+        user: Annotated[core.CurrentUser, Depends(core.require("documents.read"))],
+        date_from: date | None = Query(default=None),
+        date_to: date | None = Query(default=None),
+    ):
+        conn = core.connect()
+        try:
+            return _report_for(conn, user, date_from, date_to)
+        finally:
+            conn.close()
+
+    @core.app.get("/api/capital/report.xlsx")
+    def capital_report_excel(
+        user: Annotated[core.CurrentUser, Depends(core.require("documents.read"))],
+        date_from: date | None = Query(default=None),
+        date_to: date | None = Query(default=None),
+    ):
+        conn = core.connect()
+        try:
+            report = _report_for(conn, user, date_from, date_to)
+        finally:
+            conn.close()
+        payload = report_workbook(report, user.full_name)
+        suffix = report["date_from"] if report["date_from"] == report["date_to"] else f"{report['date_from']}_{report['date_to']}"
+        filename = f"capital-report-{suffix}.xlsx"
+        return Response(
+            content=payload,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+                "Content-Length": str(len(payload)),
+                "Cache-Control": "no-store",
+            },
+        )
 
     keep_static_mount_last(core.app)
